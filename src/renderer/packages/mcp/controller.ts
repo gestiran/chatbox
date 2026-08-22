@@ -207,9 +207,18 @@ export const mcpController = {
     }
   },
 
-  getAvailableTools(): ToolSet {
+  /**
+   * Collects tools from running servers. Pass `enabledServerIds` to restrict
+   * the result to a specific chat's server selection (per-chat MCP
+   * availability); omit it to get tools from every running server.
+   */
+  getAvailableTools(filter?: { enabledServerIds?: string[] }): ToolSet {
     const toolSet: ToolSet = {}
+    const allowedServerIds = filter?.enabledServerIds
     for (const { instance, config } of this.servers.values()) {
+      if (allowedServerIds && !allowedServerIds.includes(config.id)) {
+        continue
+      }
       const mcpTools = instance.getAvailableTools()
       for (const [toolName, tool] of Object.entries(mcpTools)) {
         const rawExecute = tool.execute?.bind(tool)

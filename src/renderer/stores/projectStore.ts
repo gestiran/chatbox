@@ -1,12 +1,8 @@
 import type { Project, ProjectSettings, Session } from '@shared/types'
-import { cloneDeep } from 'lodash'
 import { v4 as uuidv4 } from 'uuid'
 import { createStore, useStore } from 'zustand'
 import i18n from '@/i18n'
 import storage from '@/storage'
-import { BUILTIN_MCP_SERVERS, getBuiltinServerConfig } from '@/packages/mcp/builtin'
-import { mcpController } from '@/packages/mcp/controller'
-import type { MCPServerConfig } from '@/packages/mcp/types'
 import { sortSessionRecords } from '@/storage/SessionMetaStorage'
 import { router } from '@/router'
 import * as chatStore from '@/stores/chatStore'
@@ -287,77 +283,17 @@ export async function deleteProjectWithChats(projectId: string): Promise<void> {
   }
 }
 
-// MARK: inheritance of project parameters into new chats
-
-function applyMcpSelection(serverIds: string[], builtinServerIds: string[]) {
-  const { setSettings } = settingsStore.getState()
-  const startConfigs: MCPServerConfig[] = []
-  const stopIds: string[] = []
-
-  const mcp = settingsStore.getState().mcp
-
-  for (const server of BUILTIN_MCP_SERVERS) {
-    const shouldEnable = builtinServerIds.includes(server.id)
-    const isEnabled = mcp.enabledBuiltinServers.includes(server.id)
-    if (shouldEnable === isEnabled) continue
-    setSettings((draft) => {
-      const enabledList = draft.mcp.enabledBuiltinServers
-      if (shouldEnable) {
-        if (!enabledList.includes(server.id)) {
-          enabledList.push(server.id)
-        }
-      } else {
-        const index = enabledList.indexOf(server.id)
-        if (index >= 0) {
-          enabledList.splice(index, 1)
-        }
-      }
-    })
-    if (shouldEnable) {
-      const config = getBuiltinServerConfig(server.id)
-      if (config) {
-        startConfigs.push(config)
-      }
-    } else {
-      stopIds.push(server.id)
-    }
-  }
-
-  for (const server of mcp.servers) {
-    const shouldEnable = serverIds.includes(server.id)
-    if (shouldEnable === Boolean(server.enabled)) continue
-    setSettings((draft) => {
-      const target = draft.mcp.servers.find((item) => item.id === server.id)
-      if (target) {
-        target.enabled = shouldEnable
-      }
-    })
-    if (shouldEnable) {
-      startConfigs.push(cloneDeep(server))
-    } else {
-      stopIds.push(server.id)
-    }
-  }
-
-  for (const config of startConfigs) {
-    mcpController.startServer(config)
-  }
-  for (const id of stopIds) {
-    mcpController.stopServer(id)
-  }
-}
-
 /**
  * Applies the global-side parts of a project's starting parameters (MCP utils,
- * skills, web-search provider) so a chat created "now" runs with them.
+ * skills, web-search provider) so a chat created "now" runs with them. MCP is
+ * intentionally NOT applied globally anymore: the project's selection is baked
+ * into the new chat's own settings (see initEmptyChatSession), keeping chats
+ * independent from each other and from the global defaults.
  */
 function applyGlobalProjectSettings(project: Project) {
   const { setSettings } = settingsStore.getState()
   const projectSettings = project.settings
 
-  if (projectSettings.mcpServerIds || projectSettings.mcpBuiltinServerIds) {
-    applyMcpSelection(projectSettings.mcpServerIds ?? [], projectSettings.mcpBuiltinServerIds ?? [])
-  }
   if (projectSettings.skillNames) {
     const skillNames = [...projectSettings.skillNames]
     setSettings((draft) => {

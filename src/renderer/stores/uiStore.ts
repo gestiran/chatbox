@@ -44,6 +44,10 @@ export const uiStore = createStore(
           // created session's settings on first submit (see routes/index.tsx).
           workingDirectories?: string[]
           agentFullAccess?: boolean
+          // Per-chat MCP availability staged before the session is persisted;
+          // undefined follows the global defaults until the user toggles something.
+          enabledMcpServerIds?: string[]
+          enabledMcpBuiltinServerIds?: string[]
         },
         pictureShow: null as {
           picture: MessagePicture

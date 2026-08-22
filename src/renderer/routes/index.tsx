@@ -297,6 +297,12 @@ function Index() {
           ...(newSessionState.workingDirectories?.length
             ? { workingDirectories: newSessionState.workingDirectories }
             : {}),
+          ...(newSessionState.enabledMcpServerIds !== undefined
+            ? { enabledMcpServerIds: newSessionState.enabledMcpServerIds }
+            : {}),
+          ...(newSessionState.enabledMcpBuiltinServerIds !== undefined
+            ? { enabledMcpBuiltinServerIds: newSessionState.enabledMcpBuiltinServerIds }
+            : {}),
           ...((newSessionState.agentFullAccess ?? mcpDefaultFullAccess) ? { agentFullAccess: true } : {}),
           ...options?.settingsOverride,
         },
@@ -318,7 +324,9 @@ function Index() {
       if (
         newSessionState.knowledgeBase ||
         newSessionState.workingDirectories?.length ||
-        newSessionState.agentFullAccess !== undefined
+        newSessionState.agentFullAccess !== undefined ||
+        newSessionState.enabledMcpServerIds !== undefined ||
+        newSessionState.enabledMcpBuiltinServerIds !== undefined
       ) {
         setNewSessionState({})
       }

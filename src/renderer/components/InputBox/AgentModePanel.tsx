@@ -39,9 +39,10 @@ import {
 } from '@/analytics/agent-mode'
 import { AppTooltip as Tooltip } from '@/components/ui/tooltip'
 import { useKnowledgeBases } from '@/hooks/knowledge-base'
-import { useMCPServerStatus, useToggleMCPServer } from '@/hooks/mcp'
+import { useMCPServerStatus } from '@/hooks/mcp'
 import { navigateToSettings } from '@/modals/Settings'
 import { BUILTIN_MCP_SERVERS } from '@/packages/mcp/builtin'
+import { startMcpServerProcess } from '@/packages/mcp/session-mcp'
 import { skillsController, subscribeSkillsChanged } from '@/packages/skills/controller'
 import { WEB_SEARCH_PROVIDERS, type WebSearchProviderValue } from '@/packages/web-search/constants'
 import platform from '@/platform'
@@ -172,8 +173,6 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
   // MCP state
   const mcp = useMcpSettings()
   const isPremium = useAutoValidate()
-  const onMCPEnabledChange = useToggleMCPServer()
-  const enabledMCPCount = mcp.servers.filter((s) => s.enabled).length + mcp.enabledBuiltinServers.length
 
   // Knowledge Base state
   const { data: knowledgeBases } = useKnowledgeBases()
@@ -250,6 +249,78 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
   const newSessionState = useUIStore((s) => s.newSessionState)
   const setNewSessionState = useUIStore((s) => s.setNewSessionState)
   const { sessionSettings } = useSessionSettings(sessionId)
+
+  // MCP availability is per chat. An existing chat reads/writes its own pinned
+  // selection in session settings; a brand-new chat stages it in newSessionState
+  // (transferred on first submit, like working directories). Undefined falls back
+  // to the global defaults. Toggling never mutates global settings and only ever
+  // starts shared server processes — never stops them — so background chats are
+  // unaffected by what the user switches on or off in another chat.
+  const pinnedCustomIds = isNewSession ? newSessionState.enabledMcpServerIds : sessionSettings.enabledMcpServerIds
+  const pinnedBuiltinIds = isNewSession
+    ? newSessionState.enabledMcpBuiltinServerIds
+    : sessionSettings.enabledMcpBuiltinServerIds
+  const effectiveCustomIds = useMemo(
+    () => pinnedCustomIds ?? mcp.servers.filter((server) => server.enabled).map((server) => server.id),
+    [pinnedCustomIds, mcp.servers]
+  )
+  const effectiveBuiltinIds = useMemo(
+    () => pinnedBuiltinIds ?? mcp.enabledBuiltinServers,
+    [pinnedBuiltinIds, mcp.enabledBuiltinServers]
+  )
+  const enabledMCPCount = effectiveCustomIds.length + effectiveBuiltinIds.length
+  const onMCPEnabledChange = useCallback(
+    (id: string, enabled: boolean) => {
+      const isBuiltin = BUILTIN_MCP_SERVERS.some((server) => server.id === id)
+      const baseCustom = pinnedCustomIds ?? mcp.servers.filter((server) => server.enabled).map((server) => server.id)
+      const baseBuiltin = pinnedBuiltinIds ?? [...mcp.enabledBuiltinServers]
+      const nextCustom = isBuiltin
+        ? baseCustom
+        : enabled
+          ? [...new Set([...baseCustom, id])]
+          : baseCustom.filter((serverId) => serverId !== id)
+      const nextBuiltin = !isBuiltin
+        ? baseBuiltin
+        : enabled
+          ? [...new Set([...baseBuiltin, id])]
+          : baseBuiltin.filter((serverId) => serverId !== id)
+      if (isNewSession) {
+        setNewSessionState((prev) => ({
+          ...prev,
+          enabledMcpServerIds: nextCustom,
+          enabledMcpBuiltinServerIds: nextBuiltin,
+        }))
+      } else {
+        chatStore
+          .updateSession(sessionId, (session) => {
+            if (!session) {
+              throw new Error('Session not found')
+            }
+            return {
+              ...session,
+              settings: {
+                ...session.settings,
+                enabledMcpServerIds: nextCustom,
+                enabledMcpBuiltinServerIds: nextBuiltin,
+              },
+            }
+          })
+          .catch((err) => console.error('Failed to update chat MCP selection:', err))
+      }
+      if (enabled) {
+        startMcpServerProcess(id)
+      }
+    },
+    [
+      isNewSession,
+      mcp.servers,
+      mcp.enabledBuiltinServers,
+      pinnedCustomIds,
+      pinnedBuiltinIds,
+      sessionId,
+      setNewSessionState,
+    ]
+  )
   const workingDirectories = useMemo(
     () => (isNewSession ? (newSessionState.workingDirectories ?? []) : (sessionSettings.workingDirectories ?? [])),
     [isNewSession, newSessionState.workingDirectories, sessionSettings]
@@ -767,7 +838,7 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
                   key={server.id}
                   id={server.id}
                   name={server.name}
-                  enabled={mcp.enabledBuiltinServers.includes(server.id)}
+                  enabled={effectiveBuiltinIds.includes(server.id)}
                   disabled={workModeCapabilitiesDisabled}
                   onEnabledChange={onMCPEnabledChange}
                 />
@@ -780,7 +851,7 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
               key={server.id}
               id={server.id}
               name={server.name}
-              enabled={server.enabled}
+              enabled={effectiveCustomIds.includes(server.id)}
               disabled={workModeCapabilitiesDisabled}
               onEnabledChange={onMCPEnabledChange}
             />

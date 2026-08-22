@@ -215,6 +215,11 @@ export const SessionSettingsSchema = GlobalSessionSettingsSchema.extend({
   workingDirectories: z.array(z.string()).optional().catch(undefined),
   // When enabled, Work Mode skips per-action approval for user_exec and real filesystem mutations.
   agentFullAccess: z.boolean().optional().catch(undefined),
+  // Per-chat MCP availability. When undefined the chat follows the global
+  // enabled state (settings.mcp); arrays pin this chat's own selection, so
+  // toggling MCP in one chat never affects other chats or the global default.
+  enabledMcpServerIds: z.array(z.string()).optional().catch(undefined),
+  enabledMcpBuiltinServerIds: z.array(z.string()).optional().catch(undefined),
   agentMode: AgentModeEntrySchema.optional().catch(undefined),
 })
 

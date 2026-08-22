@@ -89,6 +89,10 @@ vi.mock('@/hooks/mcp', () => ({
   useToggleMCPServer: () => vi.fn(),
 }))
 
+vi.mock('@/packages/mcp/session-mcp', () => ({
+  startMcpServerProcess: vi.fn(),
+}))
+
 vi.mock('@/modals/Settings', () => ({
   navigateToSettings: vi.fn(),
 }))

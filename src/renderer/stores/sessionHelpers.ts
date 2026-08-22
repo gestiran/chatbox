@@ -1027,6 +1027,14 @@ export function initEmptyChatSession(project?: Project): Omit<Session, 'id'> {
         ? { workingDirectories: projectSettings.workingDirectories }
         : {}),
       ...(inheritAgentFullAccess ? { agentFullAccess: true } : {}),
+      // Per-chat MCP availability pinned by the project; undefined keeps
+      // following the global defaults at generation time.
+      ...(projectSettings?.mcpServerIds !== undefined
+        ? { enabledMcpServerIds: projectSettings.mcpServerIds }
+        : {}),
+      ...(projectSettings?.mcpBuiltinServerIds !== undefined
+        ? { enabledMcpBuiltinServerIds: projectSettings.mcpBuiltinServerIds }
+        : {}),
       ...(projectSettings?.agentMode ? { agentMode: projectSettings.agentMode } : {}),
     },
   }

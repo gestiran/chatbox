@@ -14,6 +14,7 @@ import { buildFilesystemTools } from '@/packages/model-calls/toolsets/filesystem
 import { getToolSet as getKBToolSet } from '@/packages/model-calls/toolsets/knowledge-base'
 import { asRecord, numberField, stringField, toTextModelOutput } from '@/packages/model-calls/toolsets/model-output'
 import { remapPhantomHomePath } from '@/packages/model-calls/toolsets/sandbox-paths'
+import { ensureSessionMcpServersRunning, getSessionMcpAllowList } from '@/packages/mcp/session-mcp'
 import { getToolSet as getSessionAttachmentRagToolSet } from '@/packages/model-calls/toolsets/session-attachment-rag'
 import { getToolSetDescription, parseLinkTool, webSearchTool } from '@/packages/model-calls/toolsets/web-search'
 import { skillsController, subscribeSkillsChanged } from '@/packages/skills/controller'
@@ -300,9 +301,15 @@ In long conversations, earlier tool call results may be automatically compressed
 
   let tools: ToolSet = {}
 
-  // MCP tools: agent mode only, requires model support
   if (includeAgentTools) {
-    tools = { ...mcpController.getAvailableTools() }
+    // MCP availability is per chat: the session may pin its own server
+    // selection (independent of other chats); otherwise it follows the global
+    // enabled servers. Processes are shared and only ever started here, never
+    // stopped by per-chat changes, so background chats keep their tools.
+    ensureSessionMcpServersRunning(options.sessionSettings)
+    tools = {
+      ...mcpController.getAvailableTools({ enabledServerIds: getSessionMcpAllowList(options.sessionSettings) }),
+    }
   }
 
   // Web search: works independently of agent mode
