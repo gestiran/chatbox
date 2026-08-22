@@ -110,6 +110,9 @@ export function settings(): Settings {
 
     pauseOnToolCallLimit: true,
 
+    // Default chat type for newly created chats ('chat' = Chat Mode, 'work' = Work Mode)
+    defaultChatType: 'chat',
+
     notifyOnChatCompletion: false,
 
     // Built-in agent tools (user-configured MCP servers are not affected)
@@ -163,6 +166,8 @@ export function settings(): Settings {
     mcp: {
       servers: [],
       enabledBuiltinServers: [],
+      // Default approval filtering for new chats ('approve' or 'full-access')
+      defaultFiltering: 'approve',
     },
     skills: {
       enabledSkillNames: [...DEFAULT_ENABLED_BUILTIN_SKILL_NAMES],

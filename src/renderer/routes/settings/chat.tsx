@@ -1,4 +1,4 @@
-import { Box, Button, FileButton, Flex, Slider, Stack, Switch, Text, Textarea, Title } from '@mantine/core'
+import { Box, Button, FileButton, Flex, SegmentedControl, Slider, Stack, Switch, Text, Textarea, Title } from '@mantine/core'
 import { TestId } from '@shared/automation/testids'
 import { chatSessionSettings, getDefaultPrompt } from '@shared/defaults'
 import { MAX_TOOL_CALLS_BEFORE_CONFIRMATION } from '@shared/utils/tool-call-limit-pause'
@@ -130,6 +130,24 @@ export function RouteComponent() {
       {/* Default Settings */}
       <Stack gap="md">
         <Text fw="600">{t('Default Settings for New Conversation')}</Text>
+
+        {/* Default Chat Type */}
+        <Stack gap="xxs" data-testid={TestId.settings.defaultChatTypeSelector}>
+          <Text fw="500">{t('Default Chat Type')}</Text>
+          <SegmentedControl
+            fullWidth
+            value={settings.defaultChatType ?? 'chat'}
+            onChange={(value) => setSettings({ defaultChatType: value as 'chat' | 'work' })}
+            data={[
+              { value: 'chat', label: t('Chat Mode') },
+              { value: 'work', label: t('Work Mode') },
+            ]}
+          />
+          <Text size="xs" c="chatbox-tertiary">
+            {t('Mode used for new chats.')}
+          </Text>
+        </Stack>
+
         <Stack gap="xxs">
           <Text fw="500">{t('Prompt')}</Text>
           <Textarea

@@ -376,6 +376,10 @@ const MCPServerConfigSchema = z.object({
 const MCPSettingsSchema = z.object({
   servers: z.array(MCPServerConfigSchema),
   enabledBuiltinServers: z.array(z.string()),
+  // Default approval filtering applied to new chats:
+  // 'approve' keeps per-action confirmation, 'full-access' skips it (agentFullAccess).
+  // Individual chats can override this in their Work Mode settings.
+  defaultFiltering: z.enum(['approve', 'full-access']).catch('approve'),
 })
 
 const VibedropPublicationSchema = z.object({
@@ -556,6 +560,10 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
   // Global default for the "Paused after N steps" tool-call confirmation.
   // Individual sessions can override it via SessionSettingsSchema.pauseOnToolCallLimit.
   pauseOnToolCallLimit: z.boolean().default(true),
+
+  // Default chat type used when creating a new chat:
+  // 'chat' starts in Chat Mode, 'work' starts in Work Mode.
+  defaultChatType: z.enum(['chat', 'work']).catch('chat'),
 
   // Show an OS-level "Completed" notification (with the chat title as its body)
   // when a chat finishes generating its reply.

@@ -1,11 +1,17 @@
 import type { AgentModeEntry, AgentModeLockReason, AgentModeValue, Session } from '@shared/types'
 import { useMemo } from 'react'
 import * as chatStore from '../chatStore'
+import { settingsStore, useSettingsStore } from '../settingsStore'
 import { uiStore, useUIStore } from '../uiStore'
 
-export function createDefaultAgentModeEntry(smartSwitchingDefault = uiStore.getState().agentModeSmartSwitchingDefault) {
+export function createDefaultAgentModeEntry(
+  smartSwitchingDefault = uiStore.getState().agentModeSmartSwitchingDefault,
+  defaultChatType: 'chat' | 'work' = settingsStore.getState().defaultChatType
+) {
+  // The global "default chat type" setting (Settings > Chat Settings) decides whether
+  // new chats start in Work Mode. Chat Mode keeps the smart-switching behavior.
   return {
-    value: smartSwitchingDefault ? 'auto' : 'off',
+    value: defaultChatType === 'work' ? 'on' : smartSwitchingDefault ? 'auto' : 'off',
     locked: false,
     lockReason: null,
   } satisfies AgentModeEntry
@@ -28,15 +34,16 @@ export function getSessionAgentModeEntry(
 export function useSessionAgentMode(sessionId: string): AgentModeEntry {
   const legacyMap = useUIStore((state) => state.sessionAgentModeMap)
   const smartSwitchingDefault = useUIStore((state) => state.agentModeSmartSwitchingDefault)
+  const defaultChatType = useSettingsStore((state) => state.defaultChatType)
   const { session } = chatStore.useSession(sessionId === 'new' ? null : sessionId)
 
   return useMemo(() => {
     return (
       getSessionAgentModeFromSession(session) ??
       legacyMap[sessionId] ??
-      createDefaultAgentModeEntry(smartSwitchingDefault)
+      createDefaultAgentModeEntry(smartSwitchingDefault, defaultChatType)
     )
-  }, [legacyMap, session, sessionId, smartSwitchingDefault])
+  }, [legacyMap, session, sessionId, smartSwitchingDefault, defaultChatType])
 }
 
 function setNewSessionAgentMode(value: AgentModeValue): AgentModeEntry {

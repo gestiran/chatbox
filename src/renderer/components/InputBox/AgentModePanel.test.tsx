@@ -37,6 +37,11 @@ const mocks = vi.hoisted(() => {
     skills: {
       enabledSkillNames: [],
     },
+    mcp: {
+      servers: [],
+      enabledBuiltinServers: [],
+      defaultFiltering: 'approve',
+    },
     setSettings: vi.fn(),
   }
   const uiState = {

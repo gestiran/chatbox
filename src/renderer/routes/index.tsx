@@ -97,6 +97,9 @@ function Index() {
   const licenseDetail = useSettingsStore((s) => s.licenseDetail)
   const licensePlanName = useSettingsStore((s) => s.licensePlanName)
   const hasExpiredLicense = useSettingsStore((s) => s.hasExpiredLicense)
+  // Global default approval filtering for new chats (Settings > MCP). Applied when the
+  // user has not explicitly chosen Approve/Full Access for this chat (newSessionState).
+  const mcpDefaultFullAccess = useSettingsStore((s) => s.mcp.defaultFiltering === 'full-access')
   const isLoggedIn = useAuthInfoStore((s) => Boolean(s.accessToken && s.refreshToken))
   const { isExceeded, isExceededResolved } = useVersion()
   const welcomeCardMode = useMemo(
@@ -294,7 +297,7 @@ function Index() {
           ...(newSessionState.workingDirectories?.length
             ? { workingDirectories: newSessionState.workingDirectories }
             : {}),
-          ...(newSessionState.agentFullAccess ? { agentFullAccess: true } : {}),
+          ...((newSessionState.agentFullAccess ?? mcpDefaultFullAccess) ? { agentFullAccess: true } : {}),
           ...options?.settingsOverride,
         },
       })
@@ -315,7 +318,7 @@ function Index() {
       if (
         newSessionState.knowledgeBase ||
         newSessionState.workingDirectories?.length ||
-        newSessionState.agentFullAccess
+        newSessionState.agentFullAccess !== undefined
       ) {
         setNewSessionState({})
       }
@@ -343,6 +346,7 @@ function Index() {
       newSessionState.knowledgeBase,
       newSessionState.workingDirectories,
       newSessionState.agentFullAccess,
+      mcpDefaultFullAccess,
       setNewSessionState,
       sessionWebBrowsingMap,
       setSessionWebBrowsing,

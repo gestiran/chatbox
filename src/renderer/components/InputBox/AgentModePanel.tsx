@@ -259,8 +259,11 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
     () => recentDirectories.filter((dir) => !workingDirectories.includes(dir)),
     [recentDirectories, workingDirectories]
   )
+  // New chats follow the global MCP default filtering (Settings > MCP) until the user
+  // picks an explicit value for this chat (kept in newSessionState).
+  const mcpDefaultFullAccess = useSettingsStore((s) => s.mcp.defaultFiltering === 'full-access')
   const agentFullAccess = isNewSession
-    ? (newSessionState.agentFullAccess ?? false)
+    ? (newSessionState.agentFullAccess ?? mcpDefaultFullAccess)
     : (sessionSettings.agentFullAccess ?? false)
 
   const updateWorkingDirectories = useCallback(
@@ -321,11 +324,13 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
         },
         enabled ? 'full_access' : 'approval'
       )
-      const value = enabled || undefined
       if (isNewSession) {
-        setNewSessionState((prev) => ({ ...prev, agentFullAccess: value }))
+        // Store the explicit per-chat choice (including false = Approve) so it
+        // overrides the global default filtering for this chat.
+        setNewSessionState((prev) => ({ ...prev, agentFullAccess: enabled }))
         return
       }
+      const value = enabled || undefined
       try {
         await chatStore.updateSession(sessionId, (session) => {
           if (!session) {
