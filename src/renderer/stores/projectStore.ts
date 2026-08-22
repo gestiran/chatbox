@@ -18,6 +18,7 @@ import { settingsStore } from '@/stores/settingsStore'
 import { uiStore } from '@/stores/uiStore'
 
 const STORAGE_KEY = 'projects'
+const EXPANDED_PROJECTS_STORAGE_KEY = 'projects-foldout-states'
 
 interface ProjectStoreState {
   projects: Project[]
@@ -59,6 +60,12 @@ export async function loadProjects(): Promise<Project[]> {
   const stored = await storage.getItem<Project[]>(STORAGE_KEY, [])
   const projects = Array.isArray(stored) ? stored : []
   setProjects(projects.sort((a, b) => b.sortOrder - a.sortOrder))
+  // Restore the persisted foldout open/closed states so the sidebar looks the
+  // same after an app restart.
+  const expanded = await storage.getItem<Record<string, boolean>>(EXPANDED_PROJECTS_STORAGE_KEY, {})
+  projectStore.setState({
+    expandedProjectIds: expanded && typeof expanded === 'object' ? expanded : {},
+  })
   return projectStore.getState().projects
 }
 
@@ -122,9 +129,22 @@ export async function updateProject(id: string, updates: Partial<Omit<Project, '
 }
 
 export async function setProjectExpanded(projectId: string, expanded: boolean) {
-  projectStore.setState((state) => ({
-    expandedProjectIds: { ...state.expandedProjectIds, [projectId]: expanded },
-  }))
+  const next = { ...projectStore.getState().expandedProjectIds, [projectId]: expanded }
+  projectStore.setState({ expandedProjectIds: next })
+  // storage.setItem debounces writes internally, so rapid toggling is fine.
+  await storage.setItem(EXPANDED_PROJECTS_STORAGE_KEY, next).catch((error) => {
+    console.warn('Failed to persist project foldout state:', error)
+  })
+}
+
+/** Removes the stored foldout state of a deleted project. */
+async function forgetProjectFoldoutState(projectId: string) {
+  const { expandedProjectIds } = projectStore.getState()
+  if (!(projectId in expandedProjectIds)) return
+  const next = { ...expandedProjectIds }
+  delete next[projectId]
+  projectStore.setState({ expandedProjectIds: next })
+  await storage.setItem(EXPANDED_PROJECTS_STORAGE_KEY, next)
 }
 
 /** Reorders projects with fractional indexing (newest-first ordering like sessions). */
@@ -257,6 +277,7 @@ export async function deleteProjectWithChats(projectId: string): Promise<void> {
   const projects = projectStore.getState().projects.filter((project) => project.id !== projectId)
   setProjects(projects)
   await persistProjects(projects)
+  await forgetProjectFoldoutState(projectId)
 
   // If the open chat belonged to the deleted project, fall back to the home page.
   const pathname = router.state.location.pathname
