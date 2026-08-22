@@ -126,6 +126,7 @@ function ProjectItem({ project, chatCount, expanded }: Props) {
         pl="xs"
         pr="xs"
         py={8}
+        h={36}
         className={clsx(
           'cursor-pointer select-none rounded-lg group/project-item hover:bg-chatbox-background-gray-secondary'
         )}
@@ -150,34 +151,42 @@ function ProjectItem({ project, chatCount, expanded }: Props) {
           {project.name}
         </Text>
 
-        <Box component="span" w={20} className="shrink-0 text-right">
+        {/* Fixed-size trailing slot: the chat counter and the "+" button are
+            stacked absolutely so toggling them on hover never changes the row
+            height (which used to shift the surrounding list by a few px). */}
+        <Box component="span" w={20} h={20} className="relative shrink-0">
           {chatCount > 0 && (
-            <Text span size="xs" c="chatbox-disabled" className="tabular-nums opacity-60 group-hover/project-item:hidden">
+            <Text
+              span
+              size="xs"
+              c="chatbox-disabled"
+              className="tabular-nums opacity-60 absolute inset-0 flex items-center justify-center group-hover/project-item:hidden"
+            >
               {chatCount}
             </Text>
           )}
-        </Box>
 
-        <Tooltip label={t('New Chat')} openDelay={1000} withArrow>
-          <ActionIcon
-            data-testid={TestId.sidebar.projectAddChat}
-            aria-label={t('New Chat')}
-            variant="transparent"
-            size={20}
-            color="chatbox-tertiary"
-            loading={creatingChat}
-            className="hidden group-hover/project-item:flex"
-            onPointerDown={(event) => {
-              event.stopPropagation()
-            }}
-            onClick={(event) => {
-              event.stopPropagation()
-              void handleCreateChat()
-            }}
-          >
-            <ScalableIcon icon={IconCirclePlus} size={16} />
-          </ActionIcon>
-        </Tooltip>
+          <Tooltip label={t('New Chat')} openDelay={1000} withArrow>
+            <ActionIcon
+              data-testid={TestId.sidebar.projectAddChat}
+              aria-label={t('New Chat')}
+              variant="transparent"
+              size={20}
+              color="chatbox-tertiary"
+              loading={creatingChat}
+              className="absolute inset-0 hidden group-hover/project-item:flex"
+              onPointerDown={(event) => {
+                event.stopPropagation()
+              }}
+              onClick={(event) => {
+                event.stopPropagation()
+                void handleCreateChat()
+              }}
+            >
+              <ScalableIcon icon={IconCirclePlus} size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </Box>
       </Flex>
 
       {menuOpened && (
