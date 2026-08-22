@@ -986,7 +986,11 @@ async function buildToolsForPausedToolCall(session: Session, settings: SessionSe
   const agentModeValue = agentModeSupported ? storedAgentModeValue : 'off'
   const effectiveAgentMode = agentModeSupported && agentModeValue === 'on' ? 'on' : 'off'
 
-  const sandboxProvider = effectiveAgentMode !== 'off' ? createSandboxProvider() : null
+  // Respect the General Settings toggle for built-in code execution tools:
+  // with it disabled, no sandbox is created and no code-execution toolset is
+  // built. User-configured MCP servers remain unaffected.
+  const codeExecToolsEnabled = settingsStore.getState().getSettings().enableCodeExecutionTools !== false
+  const sandboxProvider = effectiveAgentMode !== 'off' && codeExecToolsEnabled ? createSandboxProvider() : null
   // Mirror the main generation path: grant the sandbox the user's bound working directories
   // so a resumed write into them succeeds (allowWrite) instead of failing under confinement.
   const userWorkingDirectories = settings.workingDirectories?.filter((dir) => dir.trim().length > 0) ?? []

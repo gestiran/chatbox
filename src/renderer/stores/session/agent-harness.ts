@@ -213,7 +213,11 @@ export async function prepareAgentGenerationHarness(
   }
 
   const effectiveAgentMode = computeEffectiveAgentMode(agentModeValue, agentModeSupported)
-  const sandboxProvider = effectiveAgentMode !== 'off' ? sandboxProviderFactory() : null
+  // Respect the General Settings toggle for built-in code execution tools:
+  // with it disabled, no sandbox is created and no code-execution toolset is
+  // built. User-configured MCP servers remain unaffected.
+  const codeExecToolsEnabled = globalSettings.enableCodeExecutionTools !== false
+  const sandboxProvider = effectiveAgentMode !== 'off' && codeExecToolsEnabled ? sandboxProviderFactory() : null
   // Grant the sandbox read/write access to any user-bound working directories before it
   // initializes lazily on the first tool call (desktop only; cloud provider no-ops).
   const userWorkingDirectories = settings.workingDirectories?.filter((dir) => dir.trim().length > 0) ?? []

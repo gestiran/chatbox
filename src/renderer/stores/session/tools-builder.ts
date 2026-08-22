@@ -224,6 +224,13 @@ export async function buildToolsForSession(
 ): Promise<BuildToolsResult> {
   const { webBrowsing, knowledgeBase, messages, agentMode, codeExecution } = options
 
+  // Single read of global settings: gates the built-in filesystem and
+  // code-execution toolsets (both can be fully disabled from General Settings
+  // while user-configured MCP servers stay available) and the skills config.
+  const globalSettings = settingsStore.getState().getSettings()
+  const includeFilesystemToolSet = globalSettings.enableFilesystemTools !== false
+  const includeCodeExecutionToolSet = globalSettings.enableCodeExecutionTools !== false
+
   // Agent mode tools require model to support the 'agent' scope.
   // Models with weak function calling (e.g. DeepSeek V3/R1) return false here,
   // so they won't get agent-specific tools (MCP, sandbox, skills, code execution).
@@ -280,7 +287,7 @@ In long conversations, earlier tool call results may be automatically compressed
   }
 
   let codeExecToolSet: ReturnType<typeof buildCodeExecutionTools> | null = null
-  if (includeAgentTools && codeExecution) {
+  if (includeAgentTools && codeExecution && includeCodeExecutionToolSet) {
     codeExecToolSet = buildCodeExecutionTools(codeExecution)
     const workingDir = await codeExecution.provider.resolveWorkingDirectory(codeExecution.sessionId).catch(() => null)
     const userWorkingDirectories = options.sessionSettings?.workingDirectories?.filter((dir) => dir.trim().length > 0)
@@ -321,7 +328,7 @@ In long conversations, earlier tool call results may be automatically compressed
     tools = { ...tools, ...codeExecToolSet.tools }
   }
 
-  if (includeAgentTools) {
+  if (includeAgentTools && includeFilesystemToolSet) {
     const filesystemToolSet = buildFilesystemTools({
       sessionId: codeExecution?.sessionId,
       provider: codeExecution?.provider,
@@ -335,7 +342,7 @@ In long conversations, earlier tool call results may be automatically compressed
   // Skills tools: agent mode only, requires model support
   if (includeAgentTools) {
     const allSkills = await getDiscoveredSkills()
-    const skillSettings = settingsStore.getState().getSettings().skills
+    const skillSettings = globalSettings.skills
     const enabledSkills = allSkills.filter((s) => skillSettings.enabledSkillNames.includes(s.name))
     const userExecWorkingDirectory = options.sessionSettings?.workingDirectories?.find((dir) => dir.trim().length > 0)
     instructions += buildSkillToolsInstruction(

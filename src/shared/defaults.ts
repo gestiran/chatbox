@@ -110,6 +110,10 @@ export function settings(): Settings {
 
     pauseOnToolCallLimit: true,
 
+    // Built-in agent tools (user-configured MCP servers are not affected)
+    enableFilesystemTools: true,
+    enableCodeExecutionTools: true,
+
     autoLaunch: false,
     autoUpdate: true,
     betaUpdate: false,

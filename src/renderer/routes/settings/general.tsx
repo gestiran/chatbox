@@ -436,6 +436,30 @@ export function RouteComponent() {
 
       <Divider />
 
+      {/* Built-in Tools */}
+      <Stack gap="md" maw={720}>
+        <Stack gap="xxs">
+          <Title order={5}>{t('Built-in Tools')}</Title>
+          <Text c="chatbox-tertiary">
+            {t('Disable built-in agent toolsets without affecting your custom MCP servers.')}
+          </Text>
+        </Stack>
+        <Switch
+          label={t('Filesystem Tools')}
+          description={t('Exposes list_files, search_files, write_file and edit_file to the model')}
+          checked={settings.enableFilesystemTools !== false}
+          onChange={(e) => setSettings({ enableFilesystemTools: e.currentTarget.checked })}
+        />
+        <Switch
+          label={t('Code Execution')}
+          description={t(
+            'Exposes the sandboxed terminal (Bash / Node.js / PowerShell), read_file and create_download to the model'
+          )}
+          checked={settings.enableCodeExecutionTools !== false}
+          onChange={(e) => setSettings({ enableCodeExecutionTools: e.currentTarget.checked })}
+        />
+      </Stack>
+
       {/* Data Recovery */}
       <DataRecoverySection />
 

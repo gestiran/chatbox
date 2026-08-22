@@ -557,6 +557,11 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
   // Individual sessions can override it via SessionSettingsSchema.pauseOnToolCallLimit.
   pauseOnToolCallLimit: z.boolean().default(true),
 
+  // Built-in agent toolsets can be fully disabled from General Settings while
+  // user-configured MCP servers remain available.
+  enableFilesystemTools: z.boolean().default(true), // list_files / search_files / write_file / edit_file (toolsets/filesystem.ts)
+  enableCodeExecutionTools: z.boolean().default(true), // code_execution / sandbox read_file / create_download (toolsets/code-execution.ts)
+
   autoLaunch: z.boolean().default(false),
   autoUpdate: z.boolean().default(true), // 是否自动检查更新
   betaUpdate: z.boolean().default(false), // 是否自动检查 beta 更新
