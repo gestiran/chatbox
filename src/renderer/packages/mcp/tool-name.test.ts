@@ -43,6 +43,11 @@ describe('parseMcpToolName', () => {
     })
   })
 
+  it('matches a configured name whose unsupported characters were encoded as underscores', () => {
+    mcpSettings.servers = [{ name: 'My.Server' }]
+    expect(parseMcpToolName('mcp__my_server__run')).toEqual({ serverName: 'My.Server', toolName: 'run' })
+  })
+
   it('prefers the longest matching server name', () => {
     mcpSettings.servers = [{ name: 'arxiv' }, { name: 'arxiv2' }]
     expect(parseMcpToolName('mcp__arxiv2__search')).toEqual({ serverName: 'arxiv2', toolName: 'search' })
@@ -81,6 +86,11 @@ describe('getMcpToolTitle', () => {
   it('formats MCP titles as "server (tool)" using the configured name verbatim', () => {
     mcpSettings.servers = [{ name: 'Context 7 Official' }]
     expect(getMcpToolTitle('mcp__context_7_official__get-docs')).toBe('Context 7 Official (get-docs)')
+  })
+
+  it('keeps the host prefix for names with dots, spaces or punctuation', () => {
+    mcpSettings.servers = [{ name: 'MCP: Server #1' }]
+    expect(getMcpToolTitle('mcp__mcp__server__1__search')).toBe('MCP: Server #1 (search)')
   })
 
   it('falls back to the bare tool name when no server segment exists', () => {

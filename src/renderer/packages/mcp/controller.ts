@@ -4,6 +4,7 @@ import type { ToolSet } from 'ai'
 import Emittery from 'emittery'
 import { isEqual } from 'lodash'
 import { IPCStdioTransport } from './ipc-stdio-transport'
+import { normalizeServerSegment } from './tool-name'
 import type { MCPServerConfig, MCPServerStatus } from './types'
 
 type TransportConfig = MCPServerConfig['transport']
@@ -234,12 +235,13 @@ export const mcpController = {
   },
 }
 
-const SERVER_NAME_REGEX = /^[A-Za-z0-9_-]+$/
-
 function normalizeToolName(serverName: string, toolName: string) {
-  serverName = serverName.replace(/\s+/g, '_')
-  if (SERVER_NAME_REGEX.test(serverName)) {
-    return `mcp__${serverName.toLowerCase()}__${toolName}`
+  // Always encode the server segment so the UI can render the call as
+  // "<Server Name> (<tool>)" — even when the configured name contains
+  // characters the tool-key charset cannot hold.
+  const segment = normalizeServerSegment(serverName)
+  if (segment) {
+    return `mcp__${segment}__${toolName}`
   }
   return `mcp__${toolName}`
 }

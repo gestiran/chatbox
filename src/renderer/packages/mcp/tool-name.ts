@@ -3,9 +3,9 @@ import { BUILTIN_MCP_SERVERS } from './builtin'
 
 // Tool keys for MCP tools are built by `normalizeToolName` in `./controller.ts`:
 // `mcp__<server>__<tool>` where <server> is the configured name lower-cased with
-// whitespace collapsed to `_`, or just `mcp__<tool>` when the configured name
-// contains characters outside [A-Za-z0-9_-]. The helpers below reverse that
-// mapping so the UI can show the server name exactly as configured in Settings → MCP.
+// whitespace and any characters outside [A-Za-z0-9_-] encoded as `_`. The helpers
+// below reverse that mapping so the UI can show the server name exactly as
+// configured in Settings → MCP.
 const MCP_TOOL_PREFIX = 'mcp__'
 
 export type ParsedMcpToolName = {
@@ -15,8 +15,16 @@ export type ParsedMcpToolName = {
   toolName: string
 }
 
-function normalizeServerSegment(serverName: string): string {
-  return serverName.replace(/\s+/g, '_').toLowerCase()
+/**
+ * Canonical encoding of a configured server "Name" into the tool-key segment.
+ * Shared with `./controller.ts` so key building and key parsing always agree,
+ * even for names containing dots, colons or non-latin characters.
+ */
+export function normalizeServerSegment(serverName: string): string {
+  return serverName
+    .replace(/\s+/g, '_')
+    .replace(/[^A-Za-z0-9_-]/g, '_')
+    .toLowerCase()
 }
 
 /** All server names known to Settings → MCP: user-configured ones plus built-ins. */
