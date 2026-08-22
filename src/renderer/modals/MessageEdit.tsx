@@ -8,6 +8,18 @@ import { AssistantAvatar, SystemAvatar, UserAvatar } from '@/components/common/A
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
 import { generateMoreInNewFork, modifyMessage } from '@/stores/sessionActions'
 
+// The message editing popup must be 1.5x larger than the standard one,
+// both in width and in height.
+const SIZE_MULTIPLIER = 1.5
+// Mantine Modal default width for size="lg"
+const BASE_MODAL_WIDTH_PX = 620
+const EDIT_MODAL_WIDTH_PX = BASE_MODAL_WIDTH_PX * SIZE_MULTIPLIER // 930px
+// Base textarea rows before applying the 1.5x height scale-up
+const BASE_TEXTAREA_MIN_ROWS = 5
+const BASE_TEXTAREA_MAX_ROWS = 15
+const TEXTAREA_MIN_ROWS = Math.round(BASE_TEXTAREA_MIN_ROWS * SIZE_MULTIPLIER) // 8
+const TEXTAREA_MAX_ROWS = Math.round(BASE_TEXTAREA_MAX_ROWS * SIZE_MULTIPLIER) // 23
+
 const MessageEdit = NiceModal.create((props: { sessionId: string; msg: Message; hideSaveAndResend?: boolean }) => {
   const modal = useModal()
 
@@ -237,13 +249,15 @@ const MessageEditModal = ({
       <AdaptiveModal
         opened={opened}
         centered
-        size="lg"
+        size={EDIT_MODAL_WIDTH_PX}
         onClose={handleClose}
         keepMounted={false}
         lockScroll={false}
         trapFocus={false}
       >
-        <Stack gap="md" className="max-h-[70vh] overflow-y-auto -m-3 p-3">
+        {/* Content height is also 1.5x the previous 70vh limit (105vh),
+            clamped so the modal still fits into the viewport */}
+        <Stack gap="md" className="max-h-[min(105vh,calc(100vh-6rem))] overflow-y-auto -m-3 p-3">
           <Combobox
             store={combobox}
             classNames={{ dropdown: 'pointer-events-auto' }}
@@ -283,8 +297,8 @@ const MessageEditModal = ({
               id={`${msg.id}-input`}
               autoFocus={!isSmallScreen}
               autosize
-              minRows={5}
-              maxRows={15}
+              minRows={TEXTAREA_MIN_ROWS}
+              maxRows={TEXTAREA_MAX_ROWS}
               placeholder="prompt"
               value=""
               onChange={(e) => {
@@ -308,8 +322,8 @@ const MessageEditModal = ({
                     id={`${msg.id}-input-${index}`}
                     autoFocus={!isSmallScreen && index === 0}
                     autosize
-                    minRows={arr.length > 1 ? 1 : 5}
-                    maxRows={15}
+                    minRows={arr.length > 1 ? Math.round(1 * SIZE_MULTIPLIER) : TEXTAREA_MIN_ROWS}
+                    maxRows={TEXTAREA_MAX_ROWS}
                     placeholder="prompt"
                     value={part.text}
                     onChange={(e) => onContentPartInput(index, e.target.value)}
