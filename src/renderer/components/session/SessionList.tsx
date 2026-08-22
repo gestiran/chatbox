@@ -30,7 +30,7 @@ import { useIsSmallScreen } from '@/hooks/useScreenChange'
 import platform from '@/platform'
 import { useSessionList } from '@/stores/chatStore'
 import {
-  isProjectExpandedById,
+  useExpandedProjectIds,
   loadProjects,
   moveSessionIntoProject,
   reorderProjects,
@@ -71,6 +71,7 @@ export default function SessionList(props: Props) {
   const isSmallScreen = useIsSmallScreen()
 
   const projects = useProjects()
+  const expandedProjectIds = useExpandedProjectIds()
   useEffect(() => {
     loadProjects().catch((error) => {
       console.warn('Failed to load projects:', error)
@@ -167,7 +168,7 @@ export default function SessionList(props: Props) {
     // Projects are always rendered above every chat in the list.
     for (const project of projects) {
       const projectChats = sessionsByProjectId.get(project.id) ?? []
-      const expanded = isProjectExpandedById(project.id)
+      const expanded = expandedProjectIds[project.id] !== false
       items.push({
         type: 'project',
         id: projectIdToItemId(project.id),
@@ -199,7 +200,7 @@ export default function SessionList(props: Props) {
     items.push(...otherSessions.map((session) => ({ type: 'session' as const, id: session.id, session })))
 
     return items
-  }, [rootSessions, projects, sessionsByProjectId, t])
+  }, [rootSessions, projects, sessionsByProjectId, t, expandedProjectIds])
 
   const sortableItemIds = useMemo(
     () =>

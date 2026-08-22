@@ -34,12 +34,12 @@ export function useProjects(): Project[] {
   return useStore(projectStore, (state) => state.projects)
 }
 
-export function isProjectExpanded(state: ProjectStoreState, projectId: string): boolean {
-  return state.expandedProjectIds[projectId] !== false
+export function useExpandedProjectIds(): Record<string, boolean> {
+  return useStore(projectStore, (state) => state.expandedProjectIds)
 }
 
-export function isProjectExpandedById(projectId: string): boolean {
-  return projectStore.getState().expandedProjectIds[projectId] !== false
+export function isProjectExpanded(state: ProjectStoreState, projectId: string): boolean {
+  return state.expandedProjectIds[projectId] !== false
 }
 
 export function useProjectExpanded(projectId: string): boolean {
