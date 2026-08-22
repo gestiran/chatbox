@@ -1,6 +1,7 @@
 import { t } from 'i18next'
 import { parseChatboxCliInput } from '@/packages/chatbox-cli/parser'
 import type { ChatboxCliInput } from '@/packages/chatbox-cli/types'
+import { getMcpToolTitle } from '@/packages/mcp/tool-name'
 
 function getChatboxCliToolName(input: unknown): string {
   if (!input || typeof input !== 'object') return t('Chatbox')
@@ -41,6 +42,10 @@ function getChatboxCliToolName(input: unknown): string {
 
 export function getToolName(toolName: string, input?: unknown): string {
   if (toolName === 'chatbox_cli') return getChatboxCliToolName(input)
+  // MCP tool keys (`mcp__<server>__<tool>`) render as "<Server Name> (<tool>)",
+  // with the server name exactly as configured in Settings → MCP.
+  const mcpTitle = getMcpToolTitle(toolName)
+  if (mcpTitle) return mcpTitle
   // Use translation keys that i18next cli can detect
   const toolNames: Record<string, string> = {
     query_knowledge_base: t('Query Knowledge Base'),
