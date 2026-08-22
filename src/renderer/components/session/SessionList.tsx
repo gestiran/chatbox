@@ -19,26 +19,41 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Button, Flex, Text } from '@mantine/core'
-import type { SessionMetaRecord } from '@shared/types'
+import type { Project, SessionMetaRecord } from '@shared/types'
 import { areSessionsInSamePinGroup } from '@shared/utils/session-sort'
 import { IconArrowsMoveVertical, IconGripVertical, IconLoader2 } from '@tabler/icons-react'
 import { useRouterState } from '@tanstack/react-router'
-import { type CSSProperties, type MutableRefObject, useCallback, useMemo, useState } from 'react'
+import { type CSSProperties, type MutableRefObject, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Virtuoso } from 'react-virtuoso'
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
 import platform from '@/platform'
 import { useSessionList } from '@/stores/chatStore'
-import { reorderSessions } from '@/stores/sessionActions'
+import {
+  isProjectExpandedById,
+  loadProjects,
+  moveSessionIntoProject,
+  reorderProjects,
+  reorderSessionsInScope,
+  useProjects,
+} from '@/stores/projectStore'
+import ProjectItem from './ProjectItem'
 import SessionItem from './SessionItem'
 
 export interface Props {
   sessionListViewportRef: MutableRefObject<HTMLDivElement | null>
 }
 
+/** Sortable-id prefix distinguishing projects from chats in the shared DnD context. */
+const PROJECT_ITEM_ID_PREFIX = 'project:'
+const projectIdToItemId = (projectId: string) => `${PROJECT_ITEM_ID_PREFIX}${projectId}`
+const itemIdToProjectId = (itemId: string) => itemId.slice(PROJECT_ITEM_ID_PREFIX.length)
+const isProjectItemId = (itemId: string) => itemId.startsWith(PROJECT_ITEM_ID_PREFIX)
+
 type SessionListItem =
   | { type: 'section'; id: string; label: string }
-  | { type: 'session'; id: string; session: SessionMetaRecord }
+  | { type: 'session'; id: string; session: SessionMetaRecord; nestedInProject?: boolean }
+  | { type: 'project'; id: string; project: Project; chatCount: number; expanded: boolean }
 
 function SessionListLoadingFooter() {
   return (
@@ -54,6 +69,14 @@ export default function SessionList(props: Props) {
   const [activeDragId, setActiveDragId] = useState<string | null>(null)
   const [isReordering, setIsReordering] = useState(false)
   const isSmallScreen = useIsSmallScreen()
+
+  const projects = useProjects()
+  useEffect(() => {
+    loadProjects().catch((error) => {
+      console.warn('Failed to load projects:', error)
+    })
+  }, [])
+
   const touchSensor = useSensor(TouchSensor, {
     activationConstraint: {
       delay: 150,
@@ -69,6 +92,7 @@ export default function SessionList(props: Props) {
     coordinateGetter: sortableKeyboardCoordinates,
   })
   const sensors = useSensors(...(!isSmallScreen || isReordering ? [touchSensor] : []), mouseSensor, keyboardSensor)
+
   const onDragStart = (event: DragStartEvent) => {
     setActiveDragId(String(event.active.id))
   }
@@ -79,47 +103,117 @@ export default function SessionList(props: Props) {
     }
     const activeId = String(event.active.id)
     const overId = String(event.over.id)
-    if (activeId !== overId) {
-      const oldIndex = sortedSessions.findIndex((s) => s.id === activeId)
-      const newIndex = sortedSessions.findIndex((s) => s.id === overId)
-      const activeSession = sortedSessions[oldIndex]
-      const overSession = sortedSessions[newIndex]
-      if (oldIndex < 0 || newIndex < 0 || !areSessionsInSamePinGroup(activeSession, overSession)) {
+    if (activeId === overId) {
+      return
+    }
+
+    // Project rows reorder among themselves.
+    if (isProjectItemId(activeId)) {
+      if (!isProjectItemId(overId)) {
         return
       }
-      await reorderSessions(oldIndex, newIndex)
+      await reorderProjects(itemIdToProjectId(activeId), itemIdToProjectId(overId))
+      return
     }
+
+    const activeSession = sortedSessions.find((s) => s.id === activeId)
+    const overSession = !isProjectItemId(overId) ? sortedSessions.find((s) => s.id === overId) : undefined
+
+    // Dropping a chat onto a project header moves it into that project.
+    if (isProjectItemId(overId)) {
+      await moveSessionIntoProject(activeId, itemIdToProjectId(overId))
+      return
+    }
+    if (!overSession) {
+      return
+    }
+
+    const activeProjectId = activeSession?.projectId ?? null
+    const overProjectId = overSession.projectId ?? null
+    if (activeProjectId !== overProjectId) {
+      // Cross-scope drop: join the target scope next to the hovered chat.
+      await moveSessionIntoProject(activeId, overProjectId, overId)
+      return
+    }
+
+    // Root-level reorder keeps the pin-group rule; chats inside a project sort freely.
+    if (!activeProjectId && !areSessionsInSamePinGroup(activeSession, overSession)) {
+      return
+    }
+    await reorderSessionsInScope(activeId, overId)
   }
   const onDragCancel = () => {
     setActiveDragId(null)
   }
-  const activeDragSession = useMemo(
-    () => sortedSessions?.find((session) => session.id === activeDragId),
-    [activeDragId, sortedSessions]
-  )
-  const sortableSessionIds = useMemo(() => sortedSessions?.map((session) => session.id) ?? [], [sortedSessions])
+
+  const { rootSessions, sessionsByProjectId } = useMemo(() => {
+    const byProject = new Map<string, SessionMetaRecord[]>()
+    const root: SessionMetaRecord[] = []
+    for (const session of sortedSessions ?? []) {
+      if (session.projectId) {
+        const list = byProject.get(session.projectId) ?? []
+        list.push(session)
+        byProject.set(session.projectId, list)
+      } else {
+        root.push(session)
+      }
+    }
+    return { rootSessions: root, sessionsByProjectId: byProject }
+  }, [sortedSessions])
+
   const displayItems = useMemo<SessionListItem[]>(() => {
-    if (!sortedSessions) {
-      return []
+    const items: SessionListItem[] = []
+
+    // Projects are always rendered above every chat in the list.
+    for (const project of projects) {
+      const projectChats = sessionsByProjectId.get(project.id) ?? []
+      const expanded = isProjectExpandedById(project.id)
+      items.push({
+        type: 'project',
+        id: projectIdToItemId(project.id),
+        project,
+        chatCount: projectChats.length,
+        expanded,
+      })
+      if (expanded) {
+        items.push(
+          ...projectChats.map((session) => ({
+            type: 'session' as const,
+            id: session.id,
+            session,
+            nestedInProject: true,
+          }))
+        )
+      }
     }
 
-    const pinnedSessions = sortedSessions.filter((session) => session.starred)
-    const otherSessions = sortedSessions.filter((session) => !session.starred)
-    if (pinnedSessions.length === 0) {
-      return otherSessions.map((session) => ({ type: 'session', id: session.id, session }))
+    const pinnedSessions = rootSessions.filter((session) => session.starred)
+    const otherSessions = rootSessions.filter((session) => !session.starred)
+    if (pinnedSessions.length > 0) {
+      items.push({ type: 'section', id: 'section:pinned', label: t('Pinned') })
+      items.push(...pinnedSessions.map((session) => ({ type: 'session' as const, id: session.id, session })))
+      if (otherSessions.length > 0) {
+        items.push({ type: 'section', id: 'section:chats', label: t('Chats') })
+      }
     }
+    items.push(...otherSessions.map((session) => ({ type: 'session' as const, id: session.id, session })))
 
-    return [
-      { type: 'section', id: 'section:pinned', label: t('Pinned') },
-      ...pinnedSessions.map((session) => ({ type: 'session' as const, id: session.id, session })),
-      ...(otherSessions.length > 0
-        ? [
-            { type: 'section' as const, id: 'section:chats', label: t('Chats') },
-            ...otherSessions.map((session) => ({ type: 'session' as const, id: session.id, session })),
-          ]
-        : []),
-    ]
-  }, [sortedSessions, t])
+    return items
+  }, [rootSessions, projects, sessionsByProjectId, t])
+
+  const sortableItemIds = useMemo(
+    () =>
+      displayItems
+        .filter((item): item is Exclude<SessionListItem, { type: 'section' }> => item.type !== 'section')
+        .map((item) => item.id),
+    [displayItems]
+  )
+
+  const activeDragItem = useMemo(() => {
+    if (!activeDragId) return undefined
+    return displayItems.find((item) => item.type !== 'section' && item.id === activeDragId)
+  }, [activeDragId, displayItems])
+
   const routerState = useRouterState()
   const onEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -145,8 +239,8 @@ export default function SessionList(props: Props) {
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
     >
-      {sortedSessions && (
-        <SortableContext items={sortableSessionIds} strategy={verticalListSortingStrategy}>
+      {(Boolean(sortedSessions) || projects.length > 0) && (
+        <SortableContext items={sortableItemIds} strategy={verticalListSortingStrategy}>
           {isSmallScreen && isReordering && (
             <Flex
               align="center"
@@ -197,6 +291,19 @@ export default function SessionList(props: Props) {
                 )
               }
 
+              if (item.type === 'project') {
+                return (
+                  <SortableItem
+                    id={item.id}
+                    disabled={Boolean(isSmallScreen && !isReordering)}
+                    showDragHandle={Boolean(isSmallScreen && isReordering)}
+                    dragHandleLabel={t('Adjust order') || undefined}
+                  >
+                    <ProjectItem project={item.project} chatCount={item.chatCount} expanded={item.expanded} />
+                  </SortableItem>
+                )
+              }
+
               return (
                 <SortableItem
                   id={item.session.id}
@@ -204,24 +311,32 @@ export default function SessionList(props: Props) {
                   showDragHandle={Boolean(isSmallScreen && isReordering)}
                   dragHandleLabel={t('Adjust order') || undefined}
                 >
-                  <SessionItem
-                    selected={routerState.location.pathname === `/session/${item.session.id}`}
-                    session={item.session}
-                    isReordering={Boolean(isSmallScreen && isReordering)}
-                    onStartReordering={() => setIsReordering(true)}
-                  />
+                  <div className={item.nestedInProject ? 'ps-xl' : undefined}>
+                    <SessionItem
+                      selected={routerState.location.pathname === `/session/${item.session.id}`}
+                      session={item.session}
+                      isReordering={Boolean(isSmallScreen && isReordering)}
+                      onStartReordering={() => setIsReordering(true)}
+                    />
+                  </div>
                 </SortableItem>
               )
             }}
           />
           <DragOverlay dropAnimation={null}>
-            {activeDragSession ? (
+            {activeDragItem?.type === 'session' ? (
               <div className="pointer-events-none">
-                <SessionItem
-                  selected={routerState.location.pathname === `/session/${activeDragSession.id}`}
-                  session={activeDragSession}
-                  isReordering={Boolean(isSmallScreen && isReordering)}
-                />
+                <div className={activeDragItem.nestedInProject ? 'ps-xl' : undefined}>
+                  <SessionItem
+                    selected={routerState.location.pathname === `/session/${activeDragItem.session.id}`}
+                    session={activeDragItem.session}
+                    isReordering={Boolean(isSmallScreen && isReordering)}
+                  />
+                </div>
+              </div>
+            ) : activeDragItem?.type === 'project' ? (
+              <div className="pointer-events-none">
+                <ProjectItem project={activeDragItem.project} chatCount={activeDragItem.chatCount} expanded={false} />
               </div>
             ) : null}
           </DragOverlay>

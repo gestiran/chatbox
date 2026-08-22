@@ -1298,5 +1298,16 @@
   "Default Chat Type": "Тип чата по умолчанию",
   "Mode used for new chats.": "Режим, который будет использоваться для новых чатов.",
   "Default Request Filtering": "Фильтрация запросов по умолчанию",
-  "Applied to new chats. Individual chats can override this in Work Mode settings.": "Применяется к новым чатам. Для отдельных чатов это можно изменить в настройках рабочего режима."
+  "Applied to new chats. Individual chats can override this in Work Mode settings.": "Применяется к новым чатам. Для отдельных чатов это можно изменить в настройках рабочего режима.",
+  "New Project": "Новый проект",
+  "Project Settings": "Настройки проекта",
+  "AI Model": "AI модель",
+  "Default model": "Модель по умолчанию",
+  "Delete project?": "Удалить проект?",
+  "The project \"{{name}}\" and its {{count}} chat(s) will be permanently deleted.": "Проект «{{name}}» и его чаты ({{count}}) будут удалены безвозвратно.",
+  "The project \"{{name}}\" will be permanently deleted.": "Проект «{{name}}» будет удалён безвозвратно.",
+  "Overrides your default System Prompt for chats created in this project.": "Переопределяет ваш стандартный System Prompt для чатов, созданных в этом проекте.",
+  "Enable Web Search for new chats": "Включать веб-поиск для новых чатов",
+  "No skills available": "Нет доступных навыков",
+  "New chats in this project start with these parameters instead of your defaults.": "Новые чаты этого проекта стартуют с этими параметрами вместо стандартных настроек."
 }

@@ -4,6 +4,7 @@ import { searchSessionMessages } from '@shared/services/native-session-search'
 import type {
   ExportChatFormat,
   ExportChatScope,
+  Project,
   Session,
   SessionMeta,
   SessionSettings,
@@ -987,28 +988,45 @@ export function mergeSettings(
   })
 }
 
-export function initEmptyChatSession(): Omit<Session, 'id'> {
+export function initEmptyChatSession(project?: Project): Omit<Session, 'id'> {
   const settings = settingsStore.getState().getSettings()
   const { chat: lastUsedChatModel } = lastUsedModelStore.getState()
-  const defaultChatModel = settings.defaultChatModel
+  let defaultChatModel = settings.defaultChatModel
     ? {
         provider: settings.defaultChatModel.provider,
         modelId: settings.defaultChatModel.model,
       }
     : lastUsedChatModel || resolveChatboxLicenseDefaultModel(settings)
+
+  // A project overrides the user's default starting parameters at chat-creation time.
+  const projectSettings = project?.settings
+  if (projectSettings?.provider && projectSettings?.modelId) {
+    defaultChatModel = { provider: projectSettings.provider, modelId: projectSettings.modelId }
+  }
+
   const newSession: Omit<Session, 'id'> = {
     name: 'Untitled',
     type: 'chat',
+    ...(project ? { projectId: project.id } : {}),
     messages: [],
     settings: {
       maxContextMessageCount: settings.maxContextMessageCount ?? Number.MAX_SAFE_INTEGER,
       temperature: settings.temperature || undefined,
       topP: settings.topP || undefined,
       ...defaultChatModel,
+      ...(projectSettings?.workingDirectories?.length
+        ? { workingDirectories: projectSettings.workingDirectories }
+        : {}),
+      ...(projectSettings?.mcpFullAccess ? { agentFullAccess: true } : {}),
+      ...(projectSettings?.agentMode ? { agentMode: projectSettings.agentMode } : {}),
     },
   }
-  if (settings.defaultPrompt) {
-    newSession.messages.push(createMessage('system', settings.defaultPrompt || defaults.getDefaultPrompt()))
+  const systemPrompt =
+    projectSettings?.systemPrompt !== undefined && projectSettings.systemPrompt.trim() !== ''
+      ? projectSettings.systemPrompt
+      : settings.defaultPrompt
+  if (systemPrompt) {
+    newSession.messages.push(createMessage('system', systemPrompt || defaults.getDefaultPrompt()))
   }
   return newSession
 }
@@ -1033,6 +1051,7 @@ export function getSessionMeta(session: SessionMeta) {
     'starred',
     'hidden',
     'archivedAt',
+    'projectId',
     'assistantAvatarKey',
     'picUrl',
     'backgroundImage',

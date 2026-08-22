@@ -8,6 +8,7 @@ import {
   IconCirclePlus,
   IconCode,
   IconDownload,
+  IconFolderPlus,
   IconHelpCircle,
   IconInfoCircle,
   IconLayoutSidebarLeftCollapse,
@@ -29,10 +30,12 @@ import { FORCE_ENABLE_DEV_PAGES } from './dev/devToolsConfig'
 import useNeedRoomForMacWinControls from './hooks/useNeedRoomForWinControls'
 import { useIsSmallScreen, useSidebarWidth } from './hooks/useScreenChange'
 import useVersion from './hooks/useVersion'
+import { showProjectSettings } from './modals/ProjectSettingsModal'
 import { navigateToSettings } from './modals/Settings'
 import { trackingEvent } from './packages/event'
 import { getSidebarModalSx } from './sidebar-drawer'
 import icon from './static/icon.png'
+import { createProject } from './stores/projectStore'
 import { useLanguage } from './stores/settingsStore'
 import { useUIStore } from './stores/uiStore'
 import { installUpdate, useUpdateStore } from './stores/updateStore'
@@ -92,6 +95,16 @@ export default function Sidebar() {
     }
     trackingEvent('open_image_creator', { event_category: 'user' })
   }, [isSmallScreen, setShowSidebar, navigate])
+
+  const handleCreateProject = useCallback(async () => {
+    try {
+      // Creates the project with the user's base parameters, then opens its editor.
+      const project = await createProject()
+      await showProjectSettings(project)
+    } catch (error) {
+      console.error('Failed to create project:', error)
+    }
+  }, [])
 
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -239,16 +252,32 @@ export default function Sidebar() {
         <Stack gap={0} px="xs" pb="xs">
           <Divider />
           <Stack gap="xs" pt="xs" mb="xs">
-            <Button
-              variant="light"
-              fullWidth
-              radius="lg"
-              data-testid={TestId.sidebar.newChat}
-              onClick={handleCreateNewSession}
-            >
-              <ScalableIcon icon={IconCirclePlus} className="mr-2" />
-              {t('New Chat')}
-            </Button>
+            <Flex gap="xs" align="stretch">
+              <Button
+                variant="light"
+                flex={1}
+                radius="lg"
+                data-testid={TestId.sidebar.newChat}
+                onClick={handleCreateNewSession}
+              >
+                <ScalableIcon icon={IconCirclePlus} className="mr-2" />
+                {t('New Chat')}
+              </Button>
+              <Tooltip label={t('New Project')} openDelay={1000} withArrow>
+                <ActionIcon
+                  variant="light"
+                  radius="lg"
+                  h="auto"
+                  w={44}
+                  color="chatbox-secondary"
+                  data-testid={TestId.sidebar.newProject}
+                  aria-label={t('New Project')}
+                  onClick={handleCreateProject}
+                >
+                  <ScalableIcon icon={IconFolderPlus} size={20} />
+                </ActionIcon>
+              </Tooltip>
+            </Flex>
             <Button
               variant="light"
               fullWidth

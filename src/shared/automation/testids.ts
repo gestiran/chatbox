@@ -45,12 +45,18 @@ export const TestId = {
   sidebar: {
     root: 'sidebar',
     newChat: 'new-chat-button',
+    newProject: 'new-project-button',
     newImage: 'new-image-button',
     settingsTrigger: 'settings-trigger',
     sessionItem: 'session-item',
     sessionTitle: 'session-title',
     sessionPin: 'session-pin',
     sessionArchive: 'session-archive',
+    projectItem: 'project-item',
+    projectTitle: 'project-title',
+    projectAddChat: 'project-add-chat',
+    projectEdit: 'project-edit',
+    projectRemove: 'project-remove',
   },
   message: {
     item: 'message-item',

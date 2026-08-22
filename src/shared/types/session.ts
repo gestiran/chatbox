@@ -378,6 +378,8 @@ export const SessionSchema = z.object({
   hidden: z.boolean().optional(), // Hidden from session list (e.g., migrated picture sessions)
   archivedAt: z.number().optional(),
   copilotId: z.string().optional(),
+  // Project this chat belongs to (chats created inside a project inherit its settings)
+  projectId: z.string().optional(),
   assistantAvatarKey: z.string().optional(),
   backgroundImage: ImageSourceSchema.optional(),
   settings: SessionSettingsSchema.optional(),
@@ -393,6 +395,7 @@ export const SessionMetaSchema = SessionSchema.pick({
   starred: true,
   hidden: true,
   archivedAt: true,
+  projectId: true,
   assistantAvatarKey: true,
   picUrl: true,
   backgroundImage: true,

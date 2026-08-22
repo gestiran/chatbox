@@ -11,6 +11,7 @@ import FileParseError from './FileParseError'
 import JsonViewer from './JsonViewer'
 import MessageEdit from './MessageEdit'
 import ModelEdit from './ModelEdit'
+import ProjectSettingsModal from './ProjectSettingsModal'
 import ReportContent from './ReportContent'
 import SessionSettings from './SessionSettings'
 import ThreadNameEdit from './ThreadNameEdit'
@@ -31,6 +32,7 @@ NiceModal.register('message-edit', MessageEdit)
 NiceModal.register('json-viewer', JsonViewer)
 NiceModal.register('report-content', ReportContent)
 NiceModal.register('model-edit', ModelEdit)
+NiceModal.register('project-settings', ProjectSettingsModal)
 NiceModal.register('thread-name-edit', ThreadNameEdit)
 NiceModal.register('vibedrop-publish', VibedropPublish)
 NiceModal.register('copilot-settings', CopilotSettingsModal)
