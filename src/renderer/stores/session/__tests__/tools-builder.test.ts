@@ -1115,3 +1115,55 @@ describe('user_exec tool', () => {
     })
   })
 })
+
+describe('built-in tool toggles (General Settings)', () => {
+  function baseOptions(): BuildToolsOptions {
+    return {
+      webBrowsing: false,
+      messages: [],
+      agentMode: 'on',
+      codeExecution: {
+        sessionId: 'session-1',
+        provider: createMockSandboxProvider(),
+        files: [],
+      },
+    }
+  }
+
+  test('omits filesystem tools when enableFilesystemTools is false', async () => {
+    getSettingsMock.mockReturnValue({
+      skills: { enabledSkillNames: ['test-skill'] },
+      enableFilesystemTools: false,
+    })
+    const result = await buildToolsForSession(createMockModel(), baseOptions())
+    expect(result.tools.list_files).toBeUndefined()
+    expect(result.tools.search_files).toBeUndefined()
+    expect(result.tools.write_file).toBeUndefined()
+    expect(result.tools.edit_file).toBeUndefined()
+  })
+
+  test('omits Run Command and sandbox tools when enableCodeExecutionTools is false', async () => {
+    getSettingsMock.mockReturnValue({
+      skills: { enabledSkillNames: ['test-skill'] },
+      enableCodeExecutionTools: false,
+    })
+    const result = await buildToolsForSession(createMockModel(), baseOptions())
+    expect(result.tools.user_exec).toBeUndefined()
+    expect(result.tools.code_execution).toBeUndefined()
+    expect(result.tools.create_download).toBeUndefined()
+    expect(result.instructions).not.toContain('Running Commands in User Environment')
+    expect(result.instructions).not.toContain('Installing Skills')
+  })
+
+  test('keeps both toolsets when toggles are explicitly true', async () => {
+    getSettingsMock.mockReturnValue({
+      skills: { enabledSkillNames: ['test-skill'] },
+      enableFilesystemTools: true,
+      enableCodeExecutionTools: true,
+    })
+    const result = await buildToolsForSession(createMockModel(), baseOptions())
+    expect(result.tools.user_exec).toBeDefined()
+    expect(result.tools.edit_file).toBeDefined()
+    expect(result.instructions).toContain('Running Commands in User Environment')
+  })
+})

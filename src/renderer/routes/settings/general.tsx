@@ -453,7 +453,7 @@ export function RouteComponent() {
         <Switch
           label={t('Code Execution')}
           description={t(
-            'Exposes the sandboxed terminal (Bash / Node.js / PowerShell), read_file and create_download to the model'
+            'Exposes the sandboxed terminal (Bash / Node.js / PowerShell), read_file, create_download and Run Command to the model'
           )}
           checked={settings.enableCodeExecutionTools !== false}
           onChange={(e) => setSettings({ enableCodeExecutionTools: e.currentTarget.checked })}

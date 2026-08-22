@@ -231,7 +231,7 @@
   "Disable built-in agent toolsets without affecting your custom MCP servers.": "Disable built-in agent toolsets without affecting your custom MCP servers.",
   "Filesystem Tools": "Filesystem Tools",
   "Exposes list_files, search_files, write_file and edit_file to the model": "Exposes list_files, search_files, write_file and edit_file to the model",
-  "Exposes the sandboxed terminal (Bash / Node.js / PowerShell), read_file and create_download to the model": "Exposes the sandboxed terminal (Bash / Node.js / PowerShell), read_file and create_download to the model",
+  "Exposes the sandboxed terminal (Bash / Node.js / PowerShell), read_file, create_download and Run Command to the model": "Exposes the sandboxed terminal (Bash / Node.js / PowerShell), read_file, create_download and Run Command to the model",
   "Code Search": "Code Search",
   "Collapse": "Collapse",
   "Collapse attachments": "Collapse attachments",

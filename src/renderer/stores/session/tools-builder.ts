@@ -112,7 +112,8 @@ When you are about to call one or more tools, first include one short visible se
 function buildSkillToolsInstruction(
   enabledSkills: Array<{ name: string; description: string }>,
   agentFullAccess: boolean,
-  userExecWorkingDirectory?: string
+  userExecWorkingDirectory?: string,
+  hostCommandsAvailable = true
 ): string {
   let instruction = `
 ## Skills
@@ -133,7 +134,8 @@ No skills are currently enabled.
 `
   }
 
-  instruction += `
+  if (hostCommandsAvailable) {
+    instruction += `
 ### Running Commands in User Environment
 **user_exec** runs commands in the user's real environment with full system access. This is a privileged tool.
 In Work Mode, use user_exec when the user's task requires their real environment, including when a loaded skill instructs you to run a host command. It is not limited to skill-driven tasks.
@@ -150,6 +152,7 @@ You can install skills from any source:
 3. Call install_skill with the sandbox path
 The skill will be auto-enabled after installation.
 `
+  }
   return instruction
 }
 
@@ -348,7 +351,8 @@ In long conversations, earlier tool call results may be automatically compressed
     instructions += buildSkillToolsInstruction(
       enabledSkills,
       options.sessionSettings?.agentFullAccess === true,
-      userExecWorkingDirectory
+      userExecWorkingDirectory,
+      includeCodeExecutionToolSet
     )
     tools.load_skill = buildLoadSkillTool(options)
     if (enabledSkills.some((skill) => skill.name === 'chatbox-product-info')) {
@@ -359,7 +363,11 @@ In long conversations, earlier tool call results may be automatically compressed
       instructions += chatboxCliToolSet.description
       tools = { ...tools, ...chatboxCliToolSet.tools }
     }
-    tools.user_exec = buildUserExecTool(options)
+    // "Run Command" (user_exec) is part of the Code Execution capability:
+    // disabling it in General Settings removes host command access entirely.
+    if (includeCodeExecutionToolSet) {
+      tools.user_exec = buildUserExecTool(options)
+    }
     if (codeExecution) {
       tools.install_skill = buildInstallSkillTool(options)
     }
