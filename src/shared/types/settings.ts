@@ -557,6 +557,10 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
   // Individual sessions can override it via SessionSettingsSchema.pauseOnToolCallLimit.
   pauseOnToolCallLimit: z.boolean().default(true),
 
+  // Show an OS-level "Completed" notification (with the chat title as its body)
+  // when a chat finishes generating its reply.
+  notifyOnChatCompletion: z.boolean().default(false),
+
   // Built-in agent toolsets can be fully disabled from General Settings while
   // user-configured MCP servers remain available.
   enableFilesystemTools: z.boolean().default(true), // list_files / search_files / write_file / edit_file (toolsets/filesystem.ts)

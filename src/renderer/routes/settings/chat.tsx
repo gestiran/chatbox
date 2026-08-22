@@ -400,6 +400,17 @@ export function RouteComponent() {
             }
           />
           <Switch
+            data-testid={TestId.settings.notifyOnChatCompletionSwitch}
+            label={t('Notify when chat completes')}
+            description={t('Show a system notification with the chat title when a chat finishes its work.')}
+            checked={settings.notifyOnChatCompletion ?? false}
+            onChange={() =>
+              setSettings({
+                notifyOnChatCompletion: !(settings.notifyOnChatCompletion ?? false),
+              })
+            }
+          />
+          <Switch
             label={t('Spell Check')}
             checked={settings.spellCheck}
             onChange={() =>

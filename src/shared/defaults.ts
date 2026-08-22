@@ -110,6 +110,8 @@ export function settings(): Settings {
 
     pauseOnToolCallLimit: true,
 
+    notifyOnChatCompletion: false,
+
     // Built-in agent tools (user-configured MCP servers are not affected)
     enableFilesystemTools: true,
     enableCodeExecutionTools: true,

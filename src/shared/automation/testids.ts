@@ -87,6 +87,7 @@ export const TestId = {
   settings: {
     pauseOnToolCallLimitSwitch: 'settings-pause-on-tool-call-limit',
     sessionPauseOnToolCallLimitSwitch: 'session-settings-pause-on-tool-call-limit',
+    notifyOnChatCompletionSwitch: 'settings-notify-on-chat-completion',
   },
 } as const
 

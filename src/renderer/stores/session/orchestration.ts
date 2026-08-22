@@ -49,6 +49,7 @@ import {
   parseAgentModeSuggestionDecision,
 } from './agent-mode-suggestion'
 import { createAttachmentResolver } from './attachment-resolver'
+import { notifyChatCompletion } from './chat-completion-notification'
 import { findMessageLocation } from './forks'
 import { cancelRunningToolCallBatch, finishAbortedGeneration } from './generation-cancellation'
 import { withSessionGenerationLock } from './generation-lock'
@@ -509,6 +510,7 @@ export async function orchestrateGeneration(
     settleSessionGeneration(sessionId)
     if (finalMessage) {
       markSessionReplyCompleted(sessionId, finalMessage)
+      void notifyChatCompletion(sessionId, finalMessage)
     }
   }
 }
