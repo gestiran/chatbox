@@ -54,6 +54,26 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
   const [webBrowsingEnabled, setWebBrowsingEnabled] = useState<boolean>(project.settings.webBrowsingEnabled ?? false)
   const [workingDirectories, setWorkingDirectories] = useState<string[]>(project.settings.workingDirectories ?? [])
 
+  // NiceModal keeps this modal mounted between shows, and useState initializers
+  // only run on the first mount. Without this sync the editor would keep
+  // showing (and saving) the previously edited project's values instead of the
+  // project that was passed via RMB -> Edit. Every show() call passes a fresh
+  // `project` argument object, so this effect re-runs on each open.
+  useEffect(() => {
+    setName(project.name)
+    setSystemPrompt(project.settings.systemPrompt ?? '')
+    setProvider(project.settings.provider)
+    setModelId(project.settings.modelId)
+    setAgentModeValue(project.settings.agentMode?.value ?? 'off')
+    setMcpServerIds(project.settings.mcpServerIds ?? [])
+    setMcpBuiltinServerIds(project.settings.mcpBuiltinServerIds ?? [])
+    setKnowledgeBaseId(project.settings.knowledgeBaseId ?? null)
+    setSkillNames(project.settings.skillNames ?? [])
+    setWebSearchProvider(project.settings.webSearchProvider)
+    setWebBrowsingEnabled(project.settings.webBrowsingEnabled ?? false)
+    setWorkingDirectories(project.settings.workingDirectories ?? [])
+  }, [project])
+
   const mcpSettings = useMcpSettings()
   const { data: knowledgeBases } = useKnowledgeBases()
   const recentDirectories = useRecentDirectories()
