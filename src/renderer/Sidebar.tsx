@@ -9,10 +9,8 @@ import {
   IconCode,
   IconDownload,
   IconFolderPlus,
-  IconHelpCircle,
   IconInfoCircle,
   IconLayoutSidebarLeftCollapse,
-  IconMessageChatbot,
   IconPhotoPlus,
   IconSearch,
   IconSettingsFilled,
@@ -292,34 +290,6 @@ export default function Sidebar() {
 
           {isSmallScreen ? (
             <Flex gap="md" align="center">
-              <NavLink
-                c="chatbox-secondary"
-                className="rounded-lg"
-                label={t('My Copilots')}
-                leftSection={<ScalableIcon icon={IconMessageChatbot} size={20} />}
-                onClick={() => {
-                  navigate({
-                    to: '/copilots',
-                  })
-                  setShowSidebar(false)
-                }}
-                variant="light"
-                p="xs"
-              />
-
-              {!versionHook.isExceeded && (
-                <ActionIcon
-                  variant="transparent"
-                  color="chatbox-secondary"
-                  size={24}
-                  onClick={() => {
-                    navigate({ to: '/guide' })
-                    setShowSidebar(false)
-                  }}
-                >
-                  <ScalableIcon icon={IconHelpCircle} size={20} />
-                </ActionIcon>
-              )}
               <ActionIcon
                 data-testid={TestId.sidebar.settingsTrigger}
                 variant="transparent"
@@ -338,22 +308,6 @@ export default function Sidebar() {
           ) : (
             <>
               <NavLink
-                c="chatbox-secondary"
-                className="rounded-lg"
-                label={t('My Copilots')}
-                leftSection={<ScalableIcon icon={IconMessageChatbot} size={20} />}
-                onClick={() => {
-                  navigate({
-                    to: '/copilots',
-                  })
-                  if (isSmallScreen) {
-                    setShowSidebar(false)
-                  }
-                }}
-                variant="light"
-                p="xs"
-              />
-              <NavLink
                 data-testid={TestId.sidebar.settingsTrigger}
                 c="chatbox-secondary"
                 className="rounded-lg"
@@ -363,17 +317,6 @@ export default function Sidebar() {
                 variant="light"
                 p="xs"
               />
-              {!versionHook.isExceeded && (
-                <NavLink
-                  c="chatbox-secondary"
-                  className="rounded-lg"
-                  label={t('Help')}
-                  leftSection={<ScalableIcon icon={IconHelpCircle} size={20} />}
-                  onClick={() => navigate({ to: '/guide' })}
-                  variant="light"
-                  p="xs"
-                />
-              )}
               {FORCE_ENABLE_DEV_PAGES && (
                 <NavLink
                   c="chatbox-secondary"
