@@ -1,7 +1,7 @@
 {
-  "name": "xyz.chatboxapp.ce",
-  "productName": "xyz.chatboxapp.ce",
-  "version": "0.0.1",
+  "name": "xyz.chatboxapp.app",
+  "productName": "xyz.chatboxapp.app",
+  "version": "2.0.1",
   "engines": {
     "node": ">=22.13.0 <23.0.0",
     "pnpm": ">=10.17.0"
