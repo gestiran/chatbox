@@ -1004,6 +1004,15 @@ export function initEmptyChatSession(project?: Project): Omit<Session, 'id'> {
     defaultChatModel = { provider: projectSettings.provider, modelId: projectSettings.modelId }
   }
 
+  // Work Mode request filtering for the new chat. A project may pin it
+  // explicitly (mcpFullAccess); otherwise a project chat inherits the user's
+  // global "Default Request Filtering" setting. Non-project chats do not bake
+  // it in here — routes/index.tsx applies the global default when the first
+  // message is sent, so a per-chat choice made in the input box still wins.
+  const inheritAgentFullAccess = project
+    ? (projectSettings?.mcpFullAccess ?? settings.mcp.defaultFiltering === 'full-access')
+    : false
+
   const newSession: Omit<Session, 'id'> = {
     name: 'Untitled',
     type: 'chat',
@@ -1017,7 +1026,7 @@ export function initEmptyChatSession(project?: Project): Omit<Session, 'id'> {
       ...(projectSettings?.workingDirectories?.length
         ? { workingDirectories: projectSettings.workingDirectories }
         : {}),
-      ...(projectSettings?.mcpFullAccess ? { agentFullAccess: true } : {}),
+      ...(inheritAgentFullAccess ? { agentFullAccess: true } : {}),
       ...(projectSettings?.agentMode ? { agentMode: projectSettings.agentMode } : {}),
     },
   }
