@@ -1,4 +1,5 @@
 import { app, type BrowserWindow, Menu, MenuItem, type MenuItemConstructorOptions, shell } from 'electron'
+import log from 'electron-log'
 import Locale from './locales'
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
@@ -18,12 +19,14 @@ export default class MenuBuilder {
     // 监听右键菜单
     this.mainWindow.webContents.on('context-menu', (event, props) => {
       const hasSelection = Boolean(props.selectionText?.trim())
+      const misspelledWord = props.misspelledWord?.trim() ?? ''
 
-      // 没有选中文本：禁止右键菜单
-      if (!hasSelection) {
+      // 没有选中文本、也没有拼错的单词：禁止右键菜单
+      if (!hasSelection && !misspelledWord) {
         event.preventDefault()
         return
       }
+      const { x, y } = props
       const items: (Electron.MenuItem | Electron.MenuItemConstructorOptions)[] = [
         { role: 'copy', label: locale.t('Copy'), accelerator: 'CmdOrCtrl+C' },
         { role: 'cut', label: locale.t('Cut'), accelerator: 'CmdOrCtrl+X' },
@@ -41,6 +44,19 @@ export default class MenuBuilder {
           click: () => this.mainWindow.webContents.replaceMisspelling(suggestion),
         })
       }
+      if (misspelledWord) {
+        items.push({ type: 'separator' })
+        items.push({
+          label: locale.t('AddToDictionary'),
+          click: () => {
+            const added =
+              this.mainWindow.webContents.session.spellchecker.addWordToSpellCheckerDictionary(misspelledWord)
+            if (!added) {
+              log.error(`spellchecker: failed to add "${misspelledWord}" to dictionary`)
+            }
+          },
+        })
+      }
       if (process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true') {
         items.push({
           label: 'Inspect element',
@@ -49,7 +65,6 @@ export default class MenuBuilder {
           },
         })
       }
-      const { x, y } = props
       Menu.buildFromTemplate(items).popup({ window: this.mainWindow })
     })
 

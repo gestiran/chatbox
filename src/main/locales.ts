@@ -71,6 +71,10 @@ const translations = {
     en: 'Replace with',
     zh: '替换成',
   },
+  AddToDictionary: {
+    en: 'Add To Dictionary',
+    zh: '添加到词典',
+  },
   ResetZoom: {
     en: 'Reset Zoom',
     zh: '重置缩放',
