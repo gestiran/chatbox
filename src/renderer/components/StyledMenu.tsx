@@ -51,7 +51,7 @@ const StyledMenu = styled((props: MenuProps) => {
     },
   },
   '& .MuiPaper-root::-webkit-scrollbar': {
-    width: '6px',
+    width: '9px',
   },
   '& .MuiPaper-root::-webkit-scrollbar-track': {
     background: 'transparent',

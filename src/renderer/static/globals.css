@@ -269,7 +269,7 @@
 
 /* Style scrollbar for displayed math equations */
 .katex-display::-webkit-scrollbar {
-  height: 6px;
+  height: 9px;
 }
 
 .katex-display::-webkit-scrollbar-track {
