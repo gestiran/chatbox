@@ -1,12 +1,7 @@
 import { app, type BrowserWindow, dialog, Menu, MenuItem, type MenuItemConstructorOptions, shell } from 'electron'
 import log from 'electron-log'
 import Locale from './locales'
-import {
-  canAddToNativeDictionaryAtRuntime,
-  isLiveAddExperimentEnabled,
-  rememberCustomWord,
-  tryAddWordLive,
-} from './spellcheck-dictionary'
+import { isLiveWordAddEnabled, rememberCustomWord, tryAddWordLive } from './spellcheck-dictionary'
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string
@@ -61,16 +56,20 @@ export default class MenuBuilder {
   }
 
   /**
-   * Экспериментальное мгновенное применение слова без перезапуска
-   * (CHATBOX_SPELLCHECK_LIVE_ADD=1). При неудаче — обычный диалог перезапуска.
+   * Мгновенное применение слова без перезапуска (основной путь на Linux).
+   * При неудаче слово уже сохранено в persistent-словарь и применится при
+   * следующем старте, а пользователю предлагается перезапуск сразу.
    */
   private async tryLiveAddThenFallback(word: string): Promise<void> {
     const win = this.mainWindow
     const session = win && !win.isDestroyed() ? win.webContents.session : undefined
     const applied = await tryAddWordLive(word, session)
-    if (!applied) {
-      await this.offerRestartToApplyWord()
+    if (applied) {
+      log.info(`spellchecker: "${word}" applied immediately (live add)`)
+      return
     }
+    log.info(`spellchecker: "${word}" saved, it will be applied to the native dictionary on next launch`)
+    await this.offerRestartToApplyWord()
   }
 
   buildMenu(): Menu {
@@ -114,16 +113,17 @@ export default class MenuBuilder {
               // 1. Всегда сохраняем слово в собственный persistent-словарь
               //    (восстанавливается при запуске, см. spellcheck-dictionary.ts).
               const word = rememberCustomWord(misspelledWord) ?? misspelledWord
-              // 2. На Linux нативный API в рантайме вызывать нельзя — он роняет
-              //    браузерный процесс (см. комментарий в spellcheck-dictionary.ts),
-              //    поэтому там слово подействует после перезапуска.
-              if (!canAddToNativeDictionaryAtRuntime()) {
-                log.info(
-                  `spellchecker: "${word}" saved, it will be applied to the native dictionary on next launch`,
-                )
-                if (isLiveAddExperimentEnabled()) {
+              // 2. На Linux прямой нативный вызов в рантайме роняет браузерный
+              //    процесс, поэтому слово применяется через безопасную схему
+              //    tryAddWordLive(): spell checker временно выключается на время
+              //    записи и включается обратно (см. spellcheck-dictionary.ts).
+              if (process.platform === 'linux') {
+                if (isLiveWordAddEnabled()) {
                   void this.tryLiveAddThenFallback(word)
                 } else {
+                  log.info(
+                    `spellchecker: "${word}" saved, it will be applied to the native dictionary on next launch`,
+                  )
                   void this.offerRestartToApplyWord()
                 }
                 return

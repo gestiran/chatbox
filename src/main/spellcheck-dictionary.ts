@@ -18,16 +18,16 @@ import log from 'electron-log/main'
  * - Слово всегда сохраняется в собственный JSON-файл в userData.
  * - На Windows/macOS дополнительно вызываем нативный API — там он работает
  *   корректно, и слово перестаёт подчёркиваться сразу.
- * - На Linux нативный API в рантайме НЕ вызываем; накопленные слова
- *   синхронизируются с нативным словарём при следующем запуске приложения,
- *   ДО создания окон — пока spell checker не подключён ни к одному рендереру.
- * - Дополнительно есть экспериментальный путь мгновенного применения слова
- *   без перезапуска: tryAddWordLive() — включается переменной окружения
- *   CHATBOX_SPELLCHECK_LIVE_ADD=1 (см. комментарий к функции).
+ * - Мгновенное применение слова на Linux выполняется через tryAddWordLive():
+ *   spell checker временно выключается на время записи, поэтому активных
+ *   слушателей у словаря нет — краш не возникает, слово действует сразу.
+ *   Отключить мгновенное применение можно переменной окружения
+ *   CHATBOX_SPELLCHECK_LIVE_ADD=0 (тогда слово применяется при следующем
+ *   запуске через startup-синхронизацию).
  *
- * Если проблема будет исправлена в Electron, достаточно разрешить нативный
- * вызов в рантайме (canAddToNativeDictionaryAtRuntime) и убрать ветку
- * отложенной синхронизации.
+ * Если проблема будет исправлена в Electron, достаточно заменить
+ * tryAddWordLive() на прямой нативный вызов и убрать ветку отложенной
+ * синхронизации (offerRestartToApplyWord в main/menu.ts).
  */
 
 const MAX_WORDS = 10_000
@@ -105,28 +105,16 @@ export function rememberCustomWord(rawWord: string): string | null {
 }
 
 /**
- * Нативный add-word безопасен в рантайме везде, кроме Linux
- * (см. комментарий к модулю).
+ * Мгновенное («живое») добавление слова на Linux включено по умолчанию:
+ * spell checker отключается на время записи и включается обратно, что
+ * позволяет избежать краша Chromium и даёт эффект сразу (проверено на
+ * Ubuntu). Принудительное отключение (слово будет применено при следующем
+ * запуске): CHATBOX_SPELLCHECK_LIVE_ADD=0|false|no|off
  */
-export function canAddToNativeDictionaryAtRuntime(): boolean {
-  return process.platform !== 'linux'
-}
+const FALSY_ENV_VALUES = new Set(['0', 'false', 'no', 'off'])
 
-/**
- * Включение экспериментального мгновенного добавления слова на Linux:
- * CHATBOX_SPELLCHECK_LIVE_ADD=1|true|yes|on
- *
- * Идея: если краш происходит при уведомлении АКТИВНЫХ spell checker'ов
- * об изменении словаря, то добавление при выключенном spell checker'е
- * (без активных слушателей) безопасно, а повторное включение пересоздаёт
- * их уже с обновлённым словарём — и слово действует сразу, без перезапуска.
- * Если гипотеза неверна, приложение может снова начать молча закрываться —
- * поэтому эксперимент выключен по умолчанию.
- */
-const TRUTHY_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
-
-export function isLiveAddExperimentEnabled(): boolean {
-  return TRUTHY_ENV_VALUES.has((process.env.CHATBOX_SPELLCHECK_LIVE_ADD ?? '').trim().toLowerCase())
+export function isLiveWordAddEnabled(): boolean {
+  return !FALSY_ENV_VALUES.has((process.env.CHATBOX_SPELLCHECK_LIVE_ADD ?? '').trim().toLowerCase())
 }
 
 function restoreSpellcheckerState(ses: Session, wasEnabled: boolean, languages: readonly string[]): void {
