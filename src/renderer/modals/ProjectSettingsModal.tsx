@@ -18,7 +18,7 @@ import { skillsController, subscribeSkillsChanged } from '@/packages/skills/cont
 import { WEB_SEARCH_PROVIDERS } from '@/packages/web-search/constants'
 import platform from '@/platform'
 import { recentDirectoriesStore, useRecentDirectories } from '@/stores/recentDirectoriesStore'
-import { useMcpSettings } from '@/stores/settingsStore'
+import { useMcpSettings, useSettingsStore } from '@/stores/settingsStore'
 import { updateProject } from '@/stores/projectStore'
 
 const supportsWorkingDirectories = platform.type === 'desktop' && !!platform.openDirectoryDialog
@@ -77,6 +77,9 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
   const mcpSettings = useMcpSettings()
   const { data: knowledgeBases } = useKnowledgeBases()
   const recentDirectories = useRecentDirectories()
+  // Master switch for the built-in filesystem toolset (Settings / General). When it is off,
+  // project-level working directories would have no effect, so the block stays hidden.
+  const filesystemToolsEnabled = useSettingsStore((s) => s.enableFilesystemTools !== false)
 
   // Skills list (same source as the input-box panel)
   const [skills, setSkills] = useState<Array<{ name: string; description: string }>>([])
@@ -318,7 +321,7 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
             ))}
           </Stack>
 
-          {supportsWorkingDirectories && (
+          {supportsWorkingDirectories && filesystemToolsEnabled && (
             <Stack gap="xs">
               <Text fw={700}>{t('Working Directory')}</Text>
               {workingDirectories.map((dir) => (

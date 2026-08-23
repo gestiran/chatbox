@@ -182,6 +182,9 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
   const [skillsLoading, setSkillsLoading] = useState(false)
   const [skillsVersion, setSkillsVersion] = useState(0)
   const enabledSkillNames = useSettingsStore((s) => s.skills.enabledSkillNames)
+  // Master switch for the built-in filesystem toolset (Settings / General). When it is off,
+  // working-directory bindings have no effect, so the related UI is hidden as well.
+  const filesystemToolsEnabled = useSettingsStore((s) => s.enableFilesystemTools !== false)
 
   const loadSkills = useCallback(async () => {
     setSkillsLoading(true)
@@ -211,6 +214,14 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
     () => skills.filter((s) => enabledSkillNames.includes(s.name)),
     [skills, enabledSkillNames]
   )
+
+  // If Filesystem Tools are disabled while the working-directory sub-panel is open,
+  // fall back to the main page so a hidden feature is never rendered.
+  useEffect(() => {
+    if (!filesystemToolsEnabled && page === 'working-directory') {
+      setPage('main')
+    }
+  }, [filesystemToolsEnabled, page])
 
   const handleModeChange = useCallback(
     (value: AgentModeValue) => {
@@ -1157,7 +1168,7 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
             page="knowledge-base"
           />
 
-          {supportsWorkingDirectories && (
+          {supportsWorkingDirectories && filesystemToolsEnabled && (
             <ExtensionRow
               icon={<IconFolderCog size={16} className="text-[var(--chatbox-tint-secondary)]" />}
               label={t('Working Directory')}

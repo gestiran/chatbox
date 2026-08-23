@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => {
       },
     },
     licenseKey: '',
+    enableFilesystemTools: true,
     skills: {
       enabledSkillNames: [],
     },
@@ -160,6 +161,7 @@ function renderPanel(props: Partial<ComponentProps<typeof AgentModePanel>> = {})
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.agentModeEntry.value = 'on'
+  mocks.settingsState.enableFilesystemTools = true
   mocks.knowledgeBases.splice(0)
   mocks.uiState.newSessionState = {}
   recentDirectoriesStore.setState({ directories: [] })
@@ -309,6 +311,13 @@ describe('AgentModePanel capability availability', () => {
 })
 
 describe('AgentModePanel working directories', () => {
+  test('hides the Working Directory entry when Filesystem Tools are disabled', () => {
+    mocks.settingsState.enableFilesystemTools = false
+    renderPanel()
+
+    expect(screen.queryByRole('button', { name: /^Working Directory/ })).toBeNull()
+  })
+
   test('shows unselected recent directories in a new session', () => {
     mocks.uiState.newSessionState = { workingDirectories: ['/Users/themez/workspace/chatbox'] }
     recentDirectoriesStore.setState({
