@@ -290,10 +290,18 @@ export async function buildToolsForSession(
     try {
       // Search tuning comes from Settings / Knowledge Base.
       const knowledgeBaseExtension = globalSettings.extension?.knowledgeBase
-      kbToolSet = await getKBToolSet(knowledgeBase.id, knowledgeBase.name, {
-        limit: knowledgeBaseExtension?.searchLimit,
-        minSimilarity: knowledgeBaseExtension?.minSimilarity,
-      })
+      kbToolSet = await getKBToolSet(
+        knowledgeBase.id,
+        knowledgeBase.name,
+        {
+          limit: knowledgeBaseExtension?.searchLimit,
+          minSimilarity: knowledgeBaseExtension?.minSimilarity,
+        },
+        // The chunk limit is enforced per agent turn (between two user
+        // messages) and tracked separately for every chat session, so chunks
+        // are never repeated within one answer and parallel chats stay isolated.
+        { sessionId: options.sessionId, maxChunksPerTurn: knowledgeBaseExtension?.searchLimit }
+      )
     } catch (err) {
       console.error('Failed to load knowledge base toolset:', err)
     }

@@ -245,8 +245,6 @@ const toolIconMap: Record<string, React.ElementType> = {
   write_file: IconWriting,
   search_files: IconFileSearch,
   list_files: IconFileSearch,
-  get_files_meta: IconFileSearch,
-  read_file_chunks: IconFile,
   read_file: IconFile,
   code_execution: IconPlayerPlay,
   parse_file: IconFile,

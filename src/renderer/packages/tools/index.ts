@@ -49,8 +49,6 @@ export function getToolName(toolName: string, input?: unknown): string {
   // Use translation keys that i18next cli can detect
   const toolNames: Record<string, string> = {
     query_knowledge_base: t('Query Knowledge Base'),
-    get_files_meta: t('Get Files Meta'),
-    read_file_chunks: t('Read File Chunks'),
     list_files: t('List Files'),
     web_search: t('Web Search'),
     file_search: t('File Search'),

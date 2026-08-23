@@ -412,6 +412,12 @@ export interface KnowledgeBaseSearchOptions {
   limit?: number
   /** Minimum similarity in percent (1-99); lower-scored chunks are dropped. */
   minSimilarity?: number
+  /**
+   * Chunk hashes (see `computeKnowledgeBaseChunkHash`) that must be skipped.
+   * Chunks already sent earlier in the same agent turn are excluded before the
+   * limit is applied, so repeated queries can reach deeper unique results.
+   */
+  excludeHashes?: string[]
 }
 
 export type SessionAttachmentAvailability = 'allowed' | 'blocked'

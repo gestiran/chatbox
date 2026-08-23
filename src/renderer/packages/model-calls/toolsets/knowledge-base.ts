@@ -1,22 +1,24 @@
 import { jsonSchema, type ToolSet } from 'ai'
+import { KNOWLEDGE_BASE_DEFAULT_SEARCH_LIMIT } from '@shared/knowledge-base'
 import type { KnowledgeBaseSearchOptions } from '@shared/types'
 import platform from '@/platform'
-import { asRecord, contentOrErrorText, numberField, stringField, toTextModelOutput } from './model-output'
+import { asRecord, contentOrErrorText, stringField, toTextModelOutput } from './model-output'
+import { knowledgeBaseTurnTracker } from './knowledge-base-turn-tracker'
 
-function formatKnowledgeBaseArray(
-  output: unknown,
-  formatItem: (item: Record<string, unknown>, index: number) => string
-) {
-  if (typeof output === 'string') return output
-  if (!Array.isArray(output)) return contentOrErrorText(output)
-  if (output.length === 0) return 'No results found.'
-  return output
-    .map((item, index) => {
-      const record = asRecord(item)
-      return record ? formatItem(record, index) : String(item)
-    })
-    .join('\n\n')
+/**
+ * Identifies the agent turn (the span between two user messages) a query
+ * belongs to. Enables per-turn chunk de-duplication and the per-turn chunk
+ * quota; state is tracked separately for each chat session.
+ */
+export interface KnowledgeBaseQueryTurnContext {
+  sessionId?: string
+  /** Maximum number of chunks the model may receive per agent turn (Settings / Knowledge Base). */
+  maxChunksPerTurn?: number
 }
+
+/** Message shown when every matching chunk was already delivered in this turn's budget. */
+const CHUNK_QUOTA_EXHAUSTED_MESSAGE =
+  'The chunk limit for this answer has been reached. No further knowledge base results are available until the user sends a new message.'
 
 function formatSearchResults(output: unknown): string {
   if (typeof output === 'string') return output
@@ -37,34 +39,11 @@ function formatSearchResults(output: unknown): string {
     .join('\n\n')
 }
 
-function formatFileMeta(output: unknown): string {
-  return formatKnowledgeBaseArray(output, (item, index) => {
-    const filename = stringField(item, 'filename') ?? stringField(item, 'name') ?? `File ${index + 1}`
-    const id = numberField(item, 'id')
-    const chunks =
-      numberField(item, 'chunk_count') ?? numberField(item, 'chunkCount') ?? numberField(item, 'total_chunks')
-    const status = stringField(item, 'status')
-    const lines = [`File ${index + 1}`, `Name: ${filename}`]
-    if (id !== undefined) lines.push(`ID: ${id}`)
-    if (chunks !== undefined) lines.push(`Chunks: ${chunks}`)
-    if (status) lines.push(`Status: ${status}`)
-    return lines.join('\n')
-  })
-}
-
-function formatChunks(output: unknown): string {
-  return formatKnowledgeBaseArray(output, (item, index) => {
-    const filename = stringField(item, 'filename') ?? stringField(item, 'fileName') ?? 'Unknown file'
-    const chunkIndex = numberField(item, 'chunkIndex') ?? numberField(item, 'chunk_index')
-    const text = stringField(item, 'text') ?? stringField(item, 'content') ?? ''
-    const lines = [`Chunk ${index + 1}`, `Source: ${filename}`]
-    if (chunkIndex !== undefined) lines.push(`Chunk: ${chunkIndex}`)
-    lines.push('Content:', text)
-    return lines.join('\n')
-  })
-}
-
-export const queryKnowledgeBaseTool = (kbId: number, searchOptions?: KnowledgeBaseSearchOptions): ToolSet[string] => {
+export const queryKnowledgeBaseTool = (
+  kbId: number,
+  searchOptions?: KnowledgeBaseSearchOptions,
+  turnContext?: KnowledgeBaseQueryTurnContext
+): ToolSet[string] => {
   return {
     description: `Search the knowledge base with a semantic query. Returns relevant document chunks.
 
@@ -84,117 +63,33 @@ Call this when the user's question is related to the attached documents and sear
       const queryInput = input as { query: string }
       const knowledgeBaseController = platform.getKnowledgeBaseController()
       // Search tuning comes from Settings / Knowledge Base.
-      return await knowledgeBaseController.search(kbId, queryInput.query, searchOptions)
+      const sessionId = turnContext?.sessionId
+      const maxChunksPerTurn =
+        turnContext?.maxChunksPerTurn ?? searchOptions?.limit ?? KNOWLEDGE_BASE_DEFAULT_SEARCH_LIMIT
+
+      if (!sessionId) {
+        return await knowledgeBaseController.search(kbId, queryInput.query, searchOptions)
+      }
+
+      // The chunk limit is a budget for the whole agent turn, not per query:
+      // ask only for fresh (not yet sent) chunks within the remaining quota.
+      const remainingQuota = knowledgeBaseTurnTracker.getRemainingQuota(sessionId, maxChunksPerTurn)
+      if (remainingQuota <= 0) {
+        return CHUNK_QUOTA_EXHAUSTED_MESSAGE
+      }
+
+      const results = await knowledgeBaseController.search(kbId, queryInput.query, {
+        minSimilarity: searchOptions?.minSimilarity,
+        limit: remainingQuota,
+        excludeHashes: knowledgeBaseTurnTracker.getSentHashes(sessionId),
+      })
+      // Records the selected chunks so repeated queries never resend them.
+      return knowledgeBaseTurnTracker.selectNewChunks(sessionId, results, maxChunksPerTurn)
     },
     toModelOutput: toTextModelOutput(formatSearchResults),
   }
 }
 
-export function getFilesMetaTool(knowledgeBaseId: number): ToolSet[string] {
-  return {
-    description: `Get metadata for files in the current knowledge base. Use this to find out more about files returned from a search, like filename, size, and total number of chunks.`,
-    inputSchema: jsonSchema({
-      type: 'object',
-      properties: {
-        fileIds: {
-          type: 'array',
-          items: { type: 'number' },
-          description: 'An array of file IDs to get metadata for.',
-        },
-      },
-      required: ['fileIds'],
-      additionalProperties: false,
-    }),
-    execute: async (input) => {
-      const metaInput = input as { fileIds?: number[] }
-      if (!metaInput.fileIds || metaInput.fileIds.length === 0) {
-        return 'Please provide an array of file IDs.'
-      }
-      const knowledgeBaseController = platform.getKnowledgeBaseController()
-      return await knowledgeBaseController.getFilesMeta(knowledgeBaseId, metaInput.fileIds)
-    },
-    toModelOutput: toTextModelOutput(formatFileMeta),
-  }
-}
-
-export function readFileChunksTool(knowledgeBaseId: number): ToolSet[string] {
-  return {
-    description: `Read content chunks from specified files in the current knowledge base. Use this to get the text content of a document.`,
-    inputSchema: jsonSchema({
-      type: 'object',
-      properties: {
-        chunks: {
-          type: 'array',
-          description: 'An array of file and chunk index pairs to read.',
-          items: {
-            type: 'object',
-            properties: {
-              fileId: {
-                type: 'number',
-                description: 'The ID of the file.',
-              },
-              chunkIndex: {
-                type: 'number',
-                description: 'The index of the chunk to read, start from 0.',
-              },
-            },
-            required: ['fileId', 'chunkIndex'],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ['chunks'],
-      additionalProperties: false,
-    }),
-    execute: async (input) => {
-      const chunksInput = input as { chunks?: Array<{ fileId: number; chunkIndex: number }> }
-      if (!chunksInput.chunks || chunksInput.chunks.length === 0) {
-        return 'Please provide an array of chunks to read.'
-      }
-      const knowledgeBaseController = platform.getKnowledgeBaseController()
-      return await knowledgeBaseController.readFileChunks(knowledgeBaseId, chunksInput.chunks)
-    },
-    toModelOutput: toTextModelOutput(formatChunks),
-  }
-}
-
-export function listFilesTool(knowledgeBaseId: number): ToolSet[string] {
-  return {
-    description: `List all files in the current knowledge base. Returns file ID, filename, and chunk count for each file.`,
-    inputSchema: jsonSchema({
-      type: 'object',
-      properties: {
-        page: {
-          type: 'integer',
-          description: 'The page number to list, start from 0.',
-        },
-        pageSize: {
-          type: 'integer',
-          description: 'The number of files to list per page.',
-        },
-      },
-      required: ['page', 'pageSize'],
-      additionalProperties: false,
-    }),
-    execute: async (input) => {
-      const listInput = input as { page: number; pageSize: number }
-      const knowledgeBaseController = platform.getKnowledgeBaseController()
-      const files = await knowledgeBaseController.listFilesPaginated(
-        knowledgeBaseId,
-        listInput.page,
-        listInput.pageSize
-      )
-      return files
-        .filter((file) => file.status === 'done')
-        .map((file) => ({
-          id: file.id,
-          filename: file.filename,
-          chunkCount: file.chunk_count || 0,
-        }))
-    },
-    toModelOutput: toTextModelOutput(formatFileMeta),
-  }
-}
 async function getToolSetDescription(knowledgeBaseId: number, knowledgeBaseName: string) {
   // 预加载文件列表，让模型知道知识库中有什么文件
   const knowledgeBaseController = platform.getKnowledgeBaseController()
@@ -211,10 +106,7 @@ You have access to a knowledge base containing these documents:
 ${fileListStr}
 
 ### Tools:
-- **query_knowledge_base** - Semantic search over the documents.
-- **read_file_chunks** - Read document content.
-- **get_files_meta** - Get file metadata.
-- **list_files** - List all files (paginated).
+- **query_knowledge_base** - Semantic search over the documents. Returns relevant document chunks as Markdown blocks.
 
 ### When to search:
 - Search when the user's question is related to these documents and searching would help you answer accurately.
@@ -226,15 +118,13 @@ ${fileListStr}
 export async function getToolSet(
   knowledgeBaseId: number,
   knowledgeBaseName: string,
-  searchOptions?: KnowledgeBaseSearchOptions
+  searchOptions?: KnowledgeBaseSearchOptions,
+  turnContext?: KnowledgeBaseQueryTurnContext
 ) {
   return {
     description: await getToolSetDescription(knowledgeBaseId, knowledgeBaseName),
     tools: {
-      query_knowledge_base: queryKnowledgeBaseTool(knowledgeBaseId, searchOptions),
-      get_files_meta: getFilesMetaTool(knowledgeBaseId),
-      read_file_chunks: readFileChunksTool(knowledgeBaseId),
-      list_files: listFilesTool(knowledgeBaseId),
+      query_knowledge_base: queryKnowledgeBaseTool(knowledgeBaseId, searchOptions, turnContext),
     },
   }
 }

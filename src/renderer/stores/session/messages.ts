@@ -6,6 +6,7 @@ import { createModel } from '@/adapters'
 import { getLogger } from '@/lib/utils'
 import { runCompactionWithUIState } from '@/packages/context-management'
 import { getModelDisplayName } from '@/packages/model-setting-utils'
+import { knowledgeBaseTurnTracker } from '@/packages/model-calls/toolsets/knowledge-base-turn-tracker'
 import { estimateTokensFromMessages } from '@/packages/token'
 import platform from '@/platform'
 import { reportError } from '@/utils/sentry'
@@ -194,6 +195,11 @@ async function submitNewUserMessageUnlocked(
   if (!session || !settings) {
     return
   }
+
+  // A new user message starts a fresh agent turn for THIS chat only: the
+  // knowledge-base chunk de-duplication list and per-turn chunk quota are
+  // reset here (other chats' turns are not affected).
+  knowledgeBaseTurnTracker.beginTurn(sessionId)
 
   // Run compaction check before sending message (blocking)
   // Only for chat sessions with auto-compaction enabled

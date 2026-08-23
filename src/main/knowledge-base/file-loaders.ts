@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { MDocument } from '@mastra/rag'
 import { embedMany } from 'ai'
 import {
+  computeKnowledgeBaseChunkHash,
   KNOWLEDGE_BASE_CHUNK_SIZES,
   KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE,
   KNOWLEDGE_BASE_DEFAULT_MIN_SIMILARITY,
@@ -442,11 +443,14 @@ function clampSearchOption(value: number, min: number, max: number): number {
 /**
  * Search interface, embeddingProvider parameter is required.
  *
- * Options come from Settings / Knowledge Base:
+ * Options come from Settings / Knowledge Base and the calling chat session:
  * - `limit`: maximum number of chunks returned (1-128).
  * - `minSimilarity`: minimum similarity in percent (1-99). It is applied to
  *   the final per-chunk score (rerank relevance when a rerank model is
  *   configured, cosine similarity otherwise).
+ * - `excludeHashes`: hashes of chunks already sent to the model earlier in the
+ *   same agent turn. They are dropped BEFORE the limit is applied so repeated
+ *   queries can surface deeper unique chunks instead of the same top hits.
  */
 export async function searchKnowledgeBase(kbId: number, query: string, options: KnowledgeBaseSearchOptions = {}) {
   const limit = clampSearchOption(
@@ -460,6 +464,13 @@ export async function searchKnowledgeBase(kbId: number, query: string, options: 
       KNOWLEDGE_BASE_MIN_SIMILARITY_MIN,
       KNOWLEDGE_BASE_MIN_SIMILARITY_MAX
     ) / 100
+  const excludedHashes = new Set(options.excludeHashes ?? [])
+
+  interface KbScoredChunk {
+    score: number
+    fileId: unknown
+    text: unknown
+  }
 
   try {
     log.debug(`[FILE] Searching knowledge base: kbId=${kbId}, query=${query}, limit=${limit}, minScore=${minScore}`)
@@ -477,8 +488,16 @@ export async function searchKnowledgeBase(kbId: number, query: string, options: 
     const candidatePool = Math.min(Math.max(limit * 4, 20), 512)
     const results = await vectorStore.query(indexName, embedding.embeddings[0], candidatePool)
 
-    const applyLimitAndThreshold = <T extends { score: number }>(chunks: T[]): T[] =>
-      chunks.filter((chunk) => chunk.score >= minScore).slice(0, limit)
+    const applyLimitAndThreshold = <T extends KbScoredChunk>(chunks: T[]): T[] =>
+      chunks
+        .filter(
+          (chunk) =>
+            !excludedHashes.has(
+              computeKnowledgeBaseChunkHash(chunk.fileId as number | string | undefined, chunk.text)
+            )
+        )
+        .filter((chunk) => chunk.score >= minScore)
+        .slice(0, limit)
 
     try {
       const rerankInstance = await getRerankProvider(kbId)
@@ -490,6 +509,8 @@ export async function searchKnowledgeBase(kbId: number, query: string, options: 
           rerankedResults.map((r) => ({
             id: r.result.id,
             score: r.result.score,
+            fileId: r.result.metadata['fileId'],
+            text: r.result.metadata['text'],
             ...r.result.metadata,
           }))
         )
@@ -498,6 +519,8 @@ export async function searchKnowledgeBase(kbId: number, query: string, options: 
         results.map((r) => ({
           id: r.id,
           score: r.score,
+          fileId: r.metadata['fileId'],
+          text: r.metadata['text'],
           ...r.metadata,
         }))
       )
@@ -521,6 +544,8 @@ export async function searchKnowledgeBase(kbId: number, query: string, options: 
         results.map((r) => ({
           id: r.id,
           score: r.score,
+          fileId: r.metadata['fileId'],
+          text: r.metadata['text'],
           ...r.metadata,
         }))
       )
