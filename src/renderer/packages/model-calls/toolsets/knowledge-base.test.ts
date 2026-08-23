@@ -21,7 +21,7 @@ async function toModelOutput(tool: unknown, output: unknown) {
 }
 
 describe('knowledge base toolset model output', () => {
-  test('query_knowledge_base maps search results to readable model text', async () => {
+  test('query_knowledge_base wraps each chunk text in a Markdown block', async () => {
     await expect(
       toModelOutput(queryKnowledgeBaseTool(1), [
         {
@@ -33,7 +33,14 @@ describe('knowledge base toolset model output', () => {
       ])
     ).resolves.toEqual({
       type: 'text',
-      value: 'Result 1\nSource: manual.pdf\nChunk: 3\nScore: 0.923\nText:\nRelevant knowledge base text.',
+      value: '`manual.pdf`\n```\nRelevant knowledge base text.\n```',
+    })
+  })
+
+  test('query_knowledge_base reports missing information for empty results', async () => {
+    await expect(toModelOutput(queryKnowledgeBaseTool(1), [])).resolves.toEqual({
+      type: 'text',
+      value: 'No relevant information found in the knowledge base.',
     })
   })
 

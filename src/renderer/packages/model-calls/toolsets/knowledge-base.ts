@@ -1,4 +1,5 @@
 import { jsonSchema, type ToolSet } from 'ai'
+import type { KnowledgeBaseSearchOptions } from '@shared/types'
 import platform from '@/platform'
 import { asRecord, contentOrErrorText, numberField, stringField, toTextModelOutput } from './model-output'
 
@@ -18,17 +19,22 @@ function formatKnowledgeBaseArray(
 }
 
 function formatSearchResults(output: unknown): string {
-  return formatKnowledgeBaseArray(output, (item, index) => {
-    const filename = stringField(item, 'filename') ?? 'Unknown file'
-    const chunkIndex = numberField(item, 'chunkIndex')
-    const score = numberField(item, 'score')
-    const text = stringField(item, 'text') ?? ''
-    const lines = [`Result ${index + 1}`, `Source: ${filename}`]
-    if (chunkIndex !== undefined) lines.push(`Chunk: ${chunkIndex}`)
-    if (score !== undefined) lines.push(`Score: ${score.toFixed(3)}`)
-    lines.push('Text:', text)
-    return lines.join('\n')
-  })
+  if (typeof output === 'string') return output
+  if (!Array.isArray(output)) return contentOrErrorText(output)
+  if (output.length === 0) {
+    return 'No relevant information found in the knowledge base.'
+  }
+  // Plain Markdown output: only the source filename and the chunk text,
+  // one block per chunk, without any extra metadata or JSON.
+  return output
+    .map((item) => {
+      const record = asRecord(item)
+      if (!record) return String(item)
+      const filename = stringField(record, 'filename') ?? stringField(record, 'fileName') ?? 'Unknown file'
+      const text = stringField(record, 'text') ?? ''
+      return [`\`${filename}\``, '```', text, '```'].join('\n')
+    })
+    .join('\n\n')
 }
 
 function formatFileMeta(output: unknown): string {
@@ -58,7 +64,7 @@ function formatChunks(output: unknown): string {
   })
 }
 
-export const queryKnowledgeBaseTool = (kbId: number): ToolSet[string] => {
+export const queryKnowledgeBaseTool = (kbId: number, searchOptions?: KnowledgeBaseSearchOptions): ToolSet[string] => {
   return {
     description: `Search the knowledge base with a semantic query. Returns relevant document chunks.
 
@@ -77,7 +83,8 @@ Call this when the user's question is related to the attached documents and sear
     execute: async (input) => {
       const queryInput = input as { query: string }
       const knowledgeBaseController = platform.getKnowledgeBaseController()
-      return await knowledgeBaseController.search(kbId, queryInput.query)
+      // Search tuning comes from Settings / Knowledge Base.
+      return await knowledgeBaseController.search(kbId, queryInput.query, searchOptions)
     },
     toModelOutput: toTextModelOutput(formatSearchResults),
   }
@@ -216,11 +223,15 @@ ${fileListStr}
 `
 }
 
-export async function getToolSet(knowledgeBaseId: number, knowledgeBaseName: string) {
+export async function getToolSet(
+  knowledgeBaseId: number,
+  knowledgeBaseName: string,
+  searchOptions?: KnowledgeBaseSearchOptions
+) {
   return {
     description: await getToolSetDescription(knowledgeBaseId, knowledgeBaseName),
     tools: {
-      query_knowledge_base: queryKnowledgeBaseTool(knowledgeBaseId),
+      query_knowledge_base: queryKnowledgeBaseTool(knowledgeBaseId, searchOptions),
       get_files_meta: getFilesMetaTool(knowledgeBaseId),
       read_file_chunks: readFileChunksTool(knowledgeBaseId),
       list_files: listFilesTool(knowledgeBaseId),

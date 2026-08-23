@@ -1,6 +1,28 @@
-import { Alert, Button, Flex, Group, Paper, Pill, Stack, Switch, Text, TextInput, Title } from '@mantine/core'
+import {
+  Alert,
+  Button,
+  Flex,
+  Group,
+  NumberInput,
+  Paper,
+  Pill,
+  Stack,
+  Switch,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core'
 import { AdaptiveSelect } from '@/components/AdaptiveSelect'
-import { KNOWLEDGE_BASE_CHUNK_SIZES, KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE } from '@shared/knowledge-base'
+import {
+  KNOWLEDGE_BASE_CHUNK_SIZES,
+  KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE,
+  KNOWLEDGE_BASE_DEFAULT_MIN_SIMILARITY,
+  KNOWLEDGE_BASE_DEFAULT_SEARCH_LIMIT,
+  KNOWLEDGE_BASE_MIN_SIMILARITY_MAX,
+  KNOWLEDGE_BASE_MIN_SIMILARITY_MIN,
+  KNOWLEDGE_BASE_SEARCH_LIMIT_MAX,
+  KNOWLEDGE_BASE_SEARCH_LIMIT_MIN,
+} from '@shared/knowledge-base'
 import { SystemProviders } from '@shared/defaults'
 import type { KnowledgeBase, ProviderModelInfo } from '@shared/types'
 import { parseKnowledgeBaseModelString } from '@shared/utils/knowledge-base-model-parser'
@@ -478,6 +500,63 @@ const KnowledgeBasePage: React.FC = () => {
             maw={320}
           />
         </Stack>
+
+        {/* Search tuning applied when the model queries the knowledge bases. */}
+        <Group gap="md" align="flex-start" wrap="wrap">
+          <NumberInput
+            label={t('Chunk Limit')}
+            description={t('Maximum number of chunks returned by a knowledge base search.')}
+            value={extension.knowledgeBase?.searchLimit ?? KNOWLEDGE_BASE_DEFAULT_SEARCH_LIMIT}
+            min={KNOWLEDGE_BASE_SEARCH_LIMIT_MIN}
+            max={KNOWLEDGE_BASE_SEARCH_LIMIT_MAX}
+            step={1}
+            clampOnBlur
+            w={240}
+            onChange={(value) => {
+              const limit = typeof value === 'number' ? value : parseInt(value, 10)
+              if (Number.isNaN(limit)) return
+              setSettings({
+                extension: {
+                  ...extension,
+                  knowledgeBase: {
+                    ...extension.knowledgeBase,
+                    searchLimit: Math.min(
+                      KNOWLEDGE_BASE_SEARCH_LIMIT_MAX,
+                      Math.max(KNOWLEDGE_BASE_SEARCH_LIMIT_MIN, limit)
+                    ),
+                  },
+                },
+              })
+            }}
+          />
+          <NumberInput
+            label={t('Minimum Similarity (%)')}
+            description={t('Search results with a lower similarity are ignored.')}
+            value={extension.knowledgeBase?.minSimilarity ?? KNOWLEDGE_BASE_DEFAULT_MIN_SIMILARITY}
+            min={KNOWLEDGE_BASE_MIN_SIMILARITY_MIN}
+            max={KNOWLEDGE_BASE_MIN_SIMILARITY_MAX}
+            step={1}
+            clampOnBlur
+            suffix="%"
+            w={240}
+            onChange={(value) => {
+              const percent = typeof value === 'number' ? value : parseInt(value, 10)
+              if (Number.isNaN(percent)) return
+              setSettings({
+                extension: {
+                  ...extension,
+                  knowledgeBase: {
+                    ...extension.knowledgeBase,
+                    minSimilarity: Math.min(
+                      KNOWLEDGE_BASE_MIN_SIMILARITY_MAX,
+                      Math.max(KNOWLEDGE_BASE_MIN_SIMILARITY_MIN, percent)
+                    ),
+                  },
+                },
+              })
+            }}
+          />
+        </Group>
 
         <Group justify="space-between" align="center">
           <Button variant="outline" onClick={() => setShowCreate(true)} disabled={isUnsupportedPlatform}>

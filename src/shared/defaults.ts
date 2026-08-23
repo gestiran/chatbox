@@ -160,6 +160,9 @@ export function settings(): Settings {
           embedding: undefined,
           rerank: undefined,
         },
+        // Model-facing search tuning (Settings / Knowledge Base)
+        searchLimit: 4,
+        minSimilarity: 50,
         vectorStore: {
           qdrantUrl: '',
         },

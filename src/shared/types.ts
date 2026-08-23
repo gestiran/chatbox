@@ -403,6 +403,17 @@ export interface KnowledgeBaseSearchResult {
   chunkIndex: number
 }
 
+/**
+ * Options controlling how a knowledge-base search picks the chunks it returns.
+ * Configured in Settings / Knowledge Base and applied by the main process.
+ */
+export interface KnowledgeBaseSearchOptions {
+  /** Maximum number of chunks to return (1-128). */
+  limit?: number
+  /** Minimum similarity in percent (1-99); lower-scored chunks are dropped. */
+  minSimilarity?: number
+}
+
 export type SessionAttachmentAvailability = 'allowed' | 'blocked'
 export type SessionAttachmentIndexStatus = 'pending' | 'indexing' | 'ready' | 'failed'
 export type SessionAttachmentStatus = SessionAttachmentIndexStatus

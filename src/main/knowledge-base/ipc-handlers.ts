@@ -1,5 +1,5 @@
 import { ipcMain, shell } from 'electron'
-import type { FileMeta } from 'src/shared/types'
+import type { FileMeta, KnowledgeBaseSearchOptions } from 'src/shared/types'
 import {
   KNOWLEDGE_BASE_CHUNK_SIZES,
   KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE,
@@ -502,34 +502,38 @@ export function registerKnowledgeBaseHandlers() {
     }
   })
 
-  // Search interface, embeddingProvider parameter is required
-  ipcMain.handle('kb:search', async (_event, kbId: number, query: string) => {
-    try {
-      log.debug(`ipcMain: kb:search, kbId=${kbId}, query=${query}`)
+  // Search interface, embeddingProvider parameter is required.
+  // Optional options carry the search tuning from Settings / Knowledge Base.
+  ipcMain.handle(
+    'kb:search',
+    async (_event, kbId: number, query: string, options?: KnowledgeBaseSearchOptions) => {
+      try {
+        log.debug(`ipcMain: kb:search, kbId=${kbId}, query=${query}`)
 
-      if (!kbId || kbId <= 0) {
-        throw new Error('Invalid knowledge base ID')
-      }
-      if (!query || !query.trim()) {
-        throw new Error('Search query is required')
-      }
-      if (query.length > 1000) {
-        throw new Error('Search query too long (max 1000 characters)')
-      }
+        if (!kbId || kbId <= 0) {
+          throw new Error('Invalid knowledge base ID')
+        }
+        if (!query || !query.trim()) {
+          throw new Error('Search query is required')
+        }
+        if (query.length > 1000) {
+          throw new Error('Search query too long (max 1000 characters)')
+        }
 
-      return await searchKnowledgeBase(kbId, query.trim())
-    } catch (error: unknown) {
-      log.error(`ipcMain: kb:search failed for kbId=${kbId}, query=${query}`, error)
-      sentry.withScope((scope) => {
-        scope.setTag('component', 'knowledge-base-ipc')
-        scope.setTag('operation', 'search')
-        scope.setExtra('kbId', kbId)
-        scope.setExtra('queryLength', query?.length || 0)
-        sentry.captureException(error)
-      })
-      throw error
+        return await searchKnowledgeBase(kbId, query.trim(), options)
+      } catch (error: unknown) {
+        log.error(`ipcMain: kb:search failed for kbId=${kbId}, query=${query}`, error)
+        sentry.withScope((scope) => {
+          scope.setTag('component', 'knowledge-base-ipc')
+          scope.setTag('operation', 'search')
+          scope.setExtra('kbId', kbId)
+          scope.setExtra('queryLength', query?.length || 0)
+          sentry.captureException(error)
+        })
+        throw error
+      }
     }
-  })
+  )
 
   // Retry failed files
   ipcMain.handle('kb:file:retry', async (_event, fileId: number) => {

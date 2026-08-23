@@ -1,5 +1,5 @@
 import type { ElectronIPC } from '@shared/electron-types'
-import type { FileMeta } from '@shared/types'
+import type { FileMeta, KnowledgeBaseSearchOptions } from '@shared/types'
 import type { KnowledgeBaseController } from './interface'
 
 class DesktopKnowledgeBaseController implements KnowledgeBaseController {
@@ -57,8 +57,8 @@ class DesktopKnowledgeBaseController implements KnowledgeBaseController {
     return await this.ipc.invoke('kb:file:resume', fileId)
   }
 
-  async search(kbId: number, query: string) {
-    const results = await this.ipc.invoke('kb:search', kbId, query)
+  async search(kbId: number, query: string, options?: KnowledgeBaseSearchOptions) {
+    const results = await this.ipc.invoke('kb:search', kbId, query, options)
     return results
   }
 

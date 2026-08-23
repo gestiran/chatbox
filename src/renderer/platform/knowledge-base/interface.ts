@@ -3,6 +3,7 @@ import type {
   KnowledgeBase,
   KnowledgeBaseFile,
   KnowledgeBaseHashCheckResult,
+  KnowledgeBaseSearchOptions,
   KnowledgeBaseSearchResult,
 } from '@shared/types'
 
@@ -25,7 +26,7 @@ export interface KnowledgeBaseController {
   retryFile(fileId: number): Promise<void>
   pauseFile(fileId: number): Promise<void>
   resumeFile(fileId: number): Promise<void>
-  search(kbId: number, query: string): Promise<KnowledgeBaseSearchResult[]>
+  search(kbId: number, query: string, options?: KnowledgeBaseSearchOptions): Promise<KnowledgeBaseSearchResult[]>
   update(updateParams: { id: number; name?: string; rerankModel?: string; visionModel?: string }): Promise<void>
   getFilesMeta(
     kbId: number,

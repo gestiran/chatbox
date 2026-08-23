@@ -1,4 +1,12 @@
 import { z } from 'zod'
+import {
+  KNOWLEDGE_BASE_DEFAULT_MIN_SIMILARITY,
+  KNOWLEDGE_BASE_DEFAULT_SEARCH_LIMIT,
+  KNOWLEDGE_BASE_MIN_SIMILARITY_MAX,
+  KNOWLEDGE_BASE_MIN_SIMILARITY_MIN,
+  KNOWLEDGE_BASE_SEARCH_LIMIT_MAX,
+  KNOWLEDGE_BASE_SEARCH_LIMIT_MIN,
+} from '../knowledge-base'
 import { DEFAULT_INTERFACE_COLORS, getDefaultInterfaceColors } from '../theme-colors'
 import { ModelProviderEnum, ModelProviderType } from './provider'
 import { DEFAULT_ENABLED_BUILTIN_SKILL_NAMES, SkillSettingsSchema } from './skills'
@@ -363,6 +371,22 @@ const ExtensionSettingsSchema = z.object({
           qdrantUrl: z.string().optional(),
         })
         .optional(),
+      // Maximum number of chunks a knowledge-base search returns to the model.
+      searchLimit: z
+        .number()
+        .int()
+        .min(KNOWLEDGE_BASE_SEARCH_LIMIT_MIN)
+        .max(KNOWLEDGE_BASE_SEARCH_LIMIT_MAX)
+        .default(KNOWLEDGE_BASE_DEFAULT_SEARCH_LIMIT)
+        .catch(KNOWLEDGE_BASE_DEFAULT_SEARCH_LIMIT),
+      // Minimum similarity (in percent) for knowledge-base search results.
+      minSimilarity: z
+        .number()
+        .int()
+        .min(KNOWLEDGE_BASE_MIN_SIMILARITY_MIN)
+        .max(KNOWLEDGE_BASE_MIN_SIMILARITY_MAX)
+        .default(KNOWLEDGE_BASE_DEFAULT_MIN_SIMILARITY)
+        .catch(KNOWLEDGE_BASE_DEFAULT_MIN_SIMILARITY),
     })
     .optional(),
   // Document parser configuration for global default

@@ -288,7 +288,12 @@ export async function buildToolsForSession(
   let kbToolSet: Awaited<ReturnType<typeof getKBToolSet>> | null = null
   if (knowledgeBase && kbSupported) {
     try {
-      kbToolSet = await getKBToolSet(knowledgeBase.id, knowledgeBase.name)
+      // Search tuning comes from Settings / Knowledge Base.
+      const knowledgeBaseExtension = globalSettings.extension?.knowledgeBase
+      kbToolSet = await getKBToolSet(knowledgeBase.id, knowledgeBase.name, {
+        limit: knowledgeBaseExtension?.searchLimit,
+        minSimilarity: knowledgeBaseExtension?.minSimilarity,
+      })
     } catch (err) {
       console.error('Failed to load knowledge base toolset:', err)
     }

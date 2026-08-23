@@ -6,14 +6,20 @@ import { embedMany } from 'ai'
 import {
   KNOWLEDGE_BASE_CHUNK_SIZES,
   KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE,
+  KNOWLEDGE_BASE_DEFAULT_MIN_SIMILARITY,
+  KNOWLEDGE_BASE_DEFAULT_SEARCH_LIMIT,
+  KNOWLEDGE_BASE_MIN_SIMILARITY_MAX,
+  KNOWLEDGE_BASE_MIN_SIMILARITY_MIN,
   KNOWLEDGE_BASE_MAX_PARSED_CONTENT_SIZE,
   KNOWLEDGE_BASE_PARSED_CONTENT_TOO_LARGE_ERROR,
+  KNOWLEDGE_BASE_SEARCH_LIMIT_MAX,
+  KNOWLEDGE_BASE_SEARCH_LIMIT_MIN,
 } from '../../shared/knowledge-base'
 import { ChatboxAIAPIError } from '../../shared/models/errors'
 import { rerank } from '../../shared/models/rerank'
 import type { DocumentParserConfig } from '../../shared/types/settings'
 import type { DocumentParserConfig } from '../../shared/types/settings'
-import type { KnowledgeBaseHashCheckResult } from '../../shared/types'
+import type { KnowledgeBaseHashCheckResult, KnowledgeBaseSearchOptions } from '../../shared/types'
 import { sentry } from '../adapters/sentry'
 import { getLogger } from '../util'
 import { checkProcessingTimeouts, getDatabase } from './db'
@@ -428,10 +434,35 @@ export async function startWorkerLoop() {
   }
 }
 
-// Search interface, embeddingProvider parameter is required
-export async function searchKnowledgeBase(kbId: number, query: string) {
+/** Clamp a numeric option into the inclusive [min, max] integer range. */
+function clampSearchOption(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.round(value)))
+}
+
+/**
+ * Search interface, embeddingProvider parameter is required.
+ *
+ * Options come from Settings / Knowledge Base:
+ * - `limit`: maximum number of chunks returned (1-128).
+ * - `minSimilarity`: minimum similarity in percent (1-99). It is applied to
+ *   the final per-chunk score (rerank relevance when a rerank model is
+ *   configured, cosine similarity otherwise).
+ */
+export async function searchKnowledgeBase(kbId: number, query: string, options: KnowledgeBaseSearchOptions = {}) {
+  const limit = clampSearchOption(
+    options.limit ?? KNOWLEDGE_BASE_DEFAULT_SEARCH_LIMIT,
+    KNOWLEDGE_BASE_SEARCH_LIMIT_MIN,
+    KNOWLEDGE_BASE_SEARCH_LIMIT_MAX
+  )
+  const minScore =
+    clampSearchOption(
+      options.minSimilarity ?? KNOWLEDGE_BASE_DEFAULT_MIN_SIMILARITY,
+      KNOWLEDGE_BASE_MIN_SIMILARITY_MIN,
+      KNOWLEDGE_BASE_MIN_SIMILARITY_MAX
+    ) / 100
+
   try {
-    log.debug(`[FILE] Searching knowledge base: kbId=${kbId}, query=${query}`)
+    log.debug(`[FILE] Searching knowledge base: kbId=${kbId}, query=${query}, limit=${limit}, minScore=${minScore}`)
     const embeddingInstance = await getEmbeddingProvider(kbId)
     const embedding = await embedMany({
       model: embeddingInstance,
@@ -441,24 +472,35 @@ export async function searchKnowledgeBase(kbId: number, query: string) {
     })
     const vectorStore = getKnowledgeBaseVectorStore()
     const indexName = `kb_${kbId}`
-    const results = await vectorStore.query(indexName, embedding.embeddings[0], 20)
+    // Fetch a wider candidate pool so reranking can pick the best hits before
+    // the configured limit and similarity threshold are applied.
+    const candidatePool = Math.min(Math.max(limit * 4, 20), 512)
+    const results = await vectorStore.query(indexName, embedding.embeddings[0], candidatePool)
+
+    const applyLimitAndThreshold = <T extends { score: number }>(chunks: T[]): T[] =>
+      chunks.filter((chunk) => chunk.score >= minScore).slice(0, limit)
+
     try {
       const rerankInstance = await getRerankProvider(kbId)
       if (rerankInstance) {
         const rerankedResults = await rerank(results, query, rerankInstance, {
-          topK: 5,
+          topK: limit,
         })
-        return rerankedResults.map((r) => ({
-          id: r.result.id,
-          score: r.result.score,
-          ...r.result.metadata,
-        }))
+        return applyLimitAndThreshold(
+          rerankedResults.map((r) => ({
+            id: r.result.id,
+            score: r.result.score,
+            ...r.result.metadata,
+          }))
+        )
       }
-      return results.map((r) => ({
-        id: r.id,
-        score: r.score,
-        ...r.metadata,
-      }))
+      return applyLimitAndThreshold(
+        results.map((r) => ({
+          id: r.id,
+          score: r.score,
+          ...r.metadata,
+        }))
+      )
     } catch (e) {
       const expectedRerankError = isExpectedKnowledgeBaseRerankError(e)
       const logMessage = `[FILE] Failed to rerank: kbId=${kbId}, queryLength=${query.length}`
@@ -475,11 +517,13 @@ export async function searchKnowledgeBase(kbId: number, query: string) {
           sentry.captureException(e)
         })
       }
-      return results.map((r) => ({
-        id: r.id,
-        score: r.score,
-        ...r.metadata,
-      }))
+      return applyLimitAndThreshold(
+        results.map((r) => ({
+          id: r.id,
+          score: r.score,
+          ...r.metadata,
+        }))
+      )
     }
   } catch (e) {
     log.error(`[FILE] Failed to search: kbId=${kbId}, queryLength=${query.length}`, e)
