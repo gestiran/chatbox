@@ -1,10 +1,8 @@
 import { registerPlugin } from '@capacitor/core'
-import NiceModal from '@ebay/nice-modal-react'
 import { ActionIcon, Box, Button, Flex, Image, NavLink, Stack, Text } from '@mantine/core'
 import SwipeableDrawer from '@mui/material/SwipeableDrawer'
 import { TestId } from '@shared/automation/testids'
 import {
-  IconArchive,
   IconCirclePlus,
   IconCode,
   IconDownload,
@@ -216,17 +214,6 @@ export default function Sidebar() {
                 onClick={() => setOpenSearchDialog(true, true)}
               >
                 <IconSearch size={18} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label={t('Clear Conversation List')} openDelay={1000} withArrow>
-              <ActionIcon
-                variant="subtle"
-                color="chatbox-tertiary"
-                size={26}
-                radius="md"
-                onClick={() => NiceModal.show('clear-session-list')}
-              >
-                <IconArchive size={18} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label={t('Collapse')} openDelay={1000} withArrow>

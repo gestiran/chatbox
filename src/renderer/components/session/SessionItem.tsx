@@ -3,7 +3,7 @@ import NiceModal from '@ebay/nice-modal-react'
 import { ActionIcon, Box, Flex, Text } from '@mantine/core'
 import { TestId } from '@shared/automation/testids'
 import type { SessionMetaRecord } from '@shared/types'
-import { IconArchive, IconArrowsMoveVertical, IconLoader2, IconPinned, IconPinnedFilled } from '@tabler/icons-react'
+import { IconArchive, IconArrowsMoveVertical, IconLoader2 } from '@tabler/icons-react'
 import clsx from 'clsx'
 import dayjs from 'dayjs'
 import { type MouseEvent, memo, type PointerEvent, useRef, useState } from 'react'
@@ -13,7 +13,7 @@ import { useIsSmallScreen } from '@/hooks/useScreenChange'
 import { navigateToSettings } from '@/modals/Settings'
 import platform from '@/platform'
 import { router } from '@/router'
-import { archiveSession, countArchivedSessionsMeta, updateSession as updateSessionStore } from '@/stores/chatStore'
+import { archiveSession, countArchivedSessionsMeta } from '@/stores/chatStore'
 import { switchCurrentSession } from '@/stores/sessionActions'
 import { useSessionActivity } from '@/stores/sessionActivityStore'
 import * as toastActions from '@/stores/toastActions'
@@ -61,7 +61,6 @@ function SessionItem(props: Props) {
   const { session, selected } = props
   const { t } = useTranslation()
   const activity = useSessionActivity(session.id)
-  const pinActionLabel = session.starred ? t('Unpin') : t('Pin')
   const archiveActionLabel = t('Archive')
   const setShowSidebar = useUIStore((s) => s.setShowSidebar)
   const onClick = () => {
@@ -199,13 +198,6 @@ function SessionItem(props: Props) {
 
   const mobileMenuItems: ActionMenuItemProps[] = [
     {
-      text: pinActionLabel || '',
-      icon: session.starred ? IconPinnedFilled : IconPinned,
-      onClick: () => {
-        void updateSessionStore(session.id, { starred: !session.starred })
-      },
-    },
-    {
       text: t('Adjust order') || '',
       icon: IconArrowsMoveVertical,
       disabled: !props.onStartReordering,
@@ -304,28 +296,6 @@ function SessionItem(props: Props) {
       )}
 
       <Flex gap={2} className={clsx(isSmallScreen ? 'hidden' : 'group-hover/session-item:flex hidden')}>
-        <Tooltip label={pinActionLabel} openDelay={1000} withArrow disabled={actionTooltipDismissed}>
-          <ActionIcon
-            data-testid={TestId.sidebar.sessionPin}
-            aria-label={pinActionLabel}
-            variant="transparent"
-            size={20}
-            color={session.starred ? 'chatbox-brand' : 'chatbox-tertiary'}
-            onPointerDown={stopItemClick}
-            onClick={(event) => {
-              stopItemClick(event)
-              dismissActionTooltip()
-              void updateSessionStore(session.id, { starred: !session.starred })
-            }}
-          >
-            {session.starred ? (
-              <ScalableIcon icon={IconPinnedFilled} className="text-inherit" size={16} />
-            ) : (
-              <ScalableIcon icon={IconPinned} className="text-inherit" size={16} />
-            )}
-          </ActionIcon>
-        </Tooltip>
-
         <Tooltip label={archiveActionLabel} openDelay={1000} withArrow disabled={actionTooltipDismissed}>
           <ActionIcon
             data-testid={TestId.sidebar.sessionArchive}

@@ -20,7 +20,6 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { Button, Flex, Text } from '@mantine/core'
 import type { Project, SessionMetaRecord } from '@shared/types'
-import { areSessionsInSamePinGroup } from '@shared/utils/session-sort'
 import { IconArrowsMoveVertical, IconGripVertical, IconLoader2 } from '@tabler/icons-react'
 import { useRouterState } from '@tanstack/react-router'
 import { type CSSProperties, type MutableRefObject, useCallback, useEffect, useMemo, useState } from 'react'
@@ -51,7 +50,6 @@ const itemIdToProjectId = (itemId: string) => itemId.slice(PROJECT_ITEM_ID_PREFI
 const isProjectItemId = (itemId: string) => itemId.startsWith(PROJECT_ITEM_ID_PREFIX)
 
 type SessionListItem =
-  | { type: 'section'; id: string; label: string }
   | { type: 'session'; id: string; session: SessionMetaRecord; nestedInProject?: boolean }
   | { type: 'project'; id: string; project: Project; chatCount: number; expanded: boolean }
 
@@ -137,10 +135,6 @@ export default function SessionList(props: Props) {
       return
     }
 
-    // Root-level reorder keeps the pin-group rule; chats inside a project sort freely.
-    if (!activeProjectId && !areSessionsInSamePinGroup(activeSession, overSession)) {
-      return
-    }
     await reorderSessionsInScope(activeId, overId)
   }
   const onDragCancel = () => {
@@ -188,31 +182,19 @@ export default function SessionList(props: Props) {
       }
     }
 
-    const pinnedSessions = rootSessions.filter((session) => session.starred)
-    const otherSessions = rootSessions.filter((session) => !session.starred)
-    if (pinnedSessions.length > 0) {
-      items.push({ type: 'section', id: 'section:pinned', label: t('Pinned') })
-      items.push(...pinnedSessions.map((session) => ({ type: 'session' as const, id: session.id, session })))
-      if (otherSessions.length > 0) {
-        items.push({ type: 'section', id: 'section:chats', label: t('Chats') })
-      }
-    }
-    items.push(...otherSessions.map((session) => ({ type: 'session' as const, id: session.id, session })))
+    items.push(...rootSessions.map((session) => ({ type: 'session' as const, id: session.id, session })))
 
     return items
-  }, [rootSessions, projects, sessionsByProjectId, t, expandedProjectIds])
+  }, [rootSessions, projects, sessionsByProjectId, expandedProjectIds])
 
   const sortableItemIds = useMemo(
-    () =>
-      displayItems
-        .filter((item): item is Exclude<SessionListItem, { type: 'section' }> => item.type !== 'section')
-        .map((item) => item.id),
+    () => displayItems.map((item) => item.id),
     [displayItems]
   )
 
   const activeDragItem = useMemo(() => {
     if (!activeDragId) return undefined
-    return displayItems.find((item) => item.type !== 'section' && item.id === activeDragId)
+    return displayItems.find((item) => item.id === activeDragId)
   }, [activeDragId, displayItems])
 
   const routerState = useRouterState()
@@ -284,14 +266,6 @@ export default function SessionList(props: Props) {
             endReached={onEndReached}
             components={virtuosoComponents}
             itemContent={(_index, item) => {
-              if (item.type === 'section') {
-                return (
-                  <Text px="md" pt="sm" pb={4} size="xs" fw={600} c="chatbox-tertiary">
-                    {item.label}
-                  </Text>
-                )
-              }
-
               if (item.type === 'project') {
                 return (
                   <SortableItem

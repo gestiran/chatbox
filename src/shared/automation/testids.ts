@@ -7,7 +7,7 @@
  */
 
 export const AUTOMATION_CONTRACT_ID = 'chatbox-ui'
-export const AUTOMATION_CONTRACT_VERSION = '1.1.0'
+export const AUTOMATION_CONTRACT_VERSION = '1.2.0'
 export const AUTOMATION_CONTRACT_VERSION_ATTRIBUTE = 'data-automation-contract-version'
 
 export type AutomationReasoningLevel = 'default' | 'off' | 'low' | 'medium' | 'high'
@@ -50,7 +50,6 @@ export const TestId = {
     settingsTrigger: 'settings-trigger',
     sessionItem: 'session-item',
     sessionTitle: 'session-title',
-    sessionPin: 'session-pin',
     sessionArchive: 'session-archive',
     projectItem: 'project-item',
     projectTitle: 'project-title',
