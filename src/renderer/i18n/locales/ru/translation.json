@@ -1317,5 +1317,9 @@
   "MCP server {{serverNames}} is unavailable. Automatic reconnection failed and the request was aborted. Please check the server in Settings - MCP and try again.": "MCP-сервер {{serverNames}} недоступен. Автоматическое переподключение не удалось, запрос был прерван. Проверьте сервер в Настройки - MCP и попробуйте снова.",
   "Spell Check Languages": "Языки проверки орфографии",
   "Select additional languages for spell checking. Leave empty to use the system language.": "Выберите дополнительные языки для проверки правописания. Если оставить пустым, будет использоваться язык системы.",
-  "System language": "Системный язык"
+  "System language": "Системный язык",
+  "Vector Store Provider": "Провайдер векторного хранилища",
+  "Provider used to compare and search documents. Each provider keeps its own documents: data added to one provider is not available in the other.": "Провайдер, используемый для сравнения и поиска документов. У каждого провайдера свои документы: данные, добавленные в один провайдер, недоступны в другом.",
+  "QDrant URL": "URL-адрес QDrant",
+  "URL of the QDrant database that all requests are sent to, e.g. http://localhost:6333": "URL-адрес базы QDrant, к которой будут выполняться все запросы, например http://localhost:6333"
 }

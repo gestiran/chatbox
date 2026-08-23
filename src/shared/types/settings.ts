@@ -357,6 +357,16 @@ const ExtensionSettingsSchema = z.object({
           .nullable()
           .optional(),
       }),
+      // Vector store provider used to compare and search documents.
+      // 'default' - built-in local store; 'qdrant' - external QDrant server.
+      // Providers work in parallel and do not share documents: data ingested
+      // while one provider is active never reaches the other one.
+      vectorStore: z
+        .object({
+          provider: z.enum(['default', 'qdrant']).catch('default'),
+          qdrantUrl: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
   // Document parser configuration for global default
@@ -625,6 +635,7 @@ export type ShortcutToggleWindowValue = z.infer<typeof ShortcutToggleWindowValue
 export type ShortcutName = keyof ShortcutSetting
 export type ShortcutSetting = z.infer<typeof ShortcutSettingSchema>
 export type ExtensionSettings = z.infer<typeof ExtensionSettingsSchema>
+export type KnowledgeBaseVectorStoreProvider = 'default' | 'qdrant'
 export type MCPTransportConfig = z.infer<typeof MCPTransportConfigSchema>
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>
 export type MCPSettings = z.infer<typeof MCPSettingsSchema>

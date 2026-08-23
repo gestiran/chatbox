@@ -61,3 +61,4 @@ getInitPromise().catch((error) => {
 export { getDatabase, getVectorStore, parseSQLiteTimestamp, withTransaction } from './db'
 export { readChunks, searchKnowledgeBase } from './file-loaders'
 export { getEmbeddingProvider, getRerankProvider, getVisionProvider } from './model-providers'
+export { getKnowledgeBaseVectorStore } from './vector-store'

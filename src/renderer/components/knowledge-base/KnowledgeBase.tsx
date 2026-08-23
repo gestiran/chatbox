@@ -1,7 +1,11 @@
-import { Alert, Button, Flex, Group, Paper, Pill, Stack, Switch, Text, Title } from '@mantine/core'
+import { Alert, Button, Flex, Group, Paper, Pill, Stack, Switch, Text, TextInput, Title } from '@mantine/core'
 import { SystemProviders } from '@shared/defaults'
 import type { KnowledgeBase, ProviderModelInfo } from '@shared/types'
-import type { DocumentParserConfig, DocumentParserType } from '@shared/types/settings'
+import type {
+  DocumentParserConfig,
+  DocumentParserType,
+  KnowledgeBaseVectorStoreProvider,
+} from '@shared/types/settings'
 import { parseKnowledgeBaseModelString } from '@shared/utils/knowledge-base-model-parser'
 import { IconAlertTriangle, IconInfoCircle, IconLogin, IconPlus } from '@tabler/icons-react'
 import compact from 'lodash/compact'
@@ -9,6 +13,7 @@ import flatten from 'lodash/flatten'
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { AdaptiveSelect } from '@/components/AdaptiveSelect'
 import { Modal } from '@/components/layout/Overlay'
 import { AppTooltip as Tooltip } from '@/components/ui/tooltip'
 import { useProviders } from '@/hooks/useProviders'
@@ -416,6 +421,7 @@ const KnowledgeBasePage: React.FC = () => {
   // Master switch (this page). When off, every control below stays visible
   // but dimmed and non-interactive.
   const knowledgeBaseEnabled = extension.knowledgeBase.enabled !== false
+  const vectorStoreProvider = extension.knowledgeBase.vectorStore?.provider ?? 'default'
 
   return (
     <Stack p="md" gap="xl">
@@ -442,6 +448,61 @@ const KnowledgeBasePage: React.FC = () => {
         aria-disabled={!knowledgeBaseEnabled}
         style={knowledgeBaseEnabled ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
       >
+        {/* Vector store provider used to compare and search documents.
+            Providers work in parallel and do not share documents. */}
+        <Stack gap="xs">
+          <AdaptiveSelect
+            label={t('Vector Store Provider')}
+            description={t(
+              'Provider used to compare and search documents. Each provider keeps its own documents: data added to one provider is not available in the other.'
+            )}
+            data={[
+              { value: 'default', label: t('Default') },
+              { value: 'qdrant', label: 'QDrant' },
+            ]}
+            value={vectorStoreProvider}
+            onChange={(value) =>
+              value &&
+              setSettings({
+                extension: {
+                  ...extension,
+                  knowledgeBase: {
+                    ...extension.knowledgeBase,
+                    vectorStore: {
+                      ...(extension.knowledgeBase.vectorStore ?? { qdrantUrl: '' }),
+                      provider: value as KnowledgeBaseVectorStoreProvider,
+                    },
+                  },
+                },
+              })
+            }
+            maw={320}
+          />
+          {vectorStoreProvider === 'qdrant' && (
+            <TextInput
+              label={t('QDrant URL')}
+              description={t('URL of the QDrant database that all requests are sent to, e.g. http://localhost:6333')}
+              placeholder="http://localhost:6333"
+              value={extension.knowledgeBase.vectorStore?.qdrantUrl ?? ''}
+              onChange={(e) =>
+                setSettings({
+                  extension: {
+                    ...extension,
+                    knowledgeBase: {
+                      ...extension.knowledgeBase,
+                      vectorStore: {
+                        ...(extension.knowledgeBase.vectorStore ?? { provider: 'qdrant' }),
+                        qdrantUrl: e.currentTarget.value,
+                      },
+                    },
+                  },
+                })
+              }
+              maw={320}
+            />
+          )}
+        </Stack>
+
         <Group justify="space-between" align="center">
           <Button variant="outline" onClick={() => setShowCreate(true)} disabled={isUnsupportedPlatform}>
             <Group gap="xs">

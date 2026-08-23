@@ -3,21 +3,13 @@ import type { FileMeta } from 'src/shared/types'
 import { KNOWLEDGE_BASE_MAX_FILE_SIZE } from '../../shared/knowledge-base'
 import { sentry } from '../adapters/sentry'
 import { getLogger } from '../util'
-import { getDatabase, getVectorStore, parseSQLiteTimestamp, withTransaction } from './db'
+import { getDatabase, parseSQLiteTimestamp, withTransaction } from './db'
 import { isExpectedKnowledgeBaseFileStateError } from './error-reporting'
 import { readChunks, searchKnowledgeBase } from './file-loaders'
 import { MineruParser, testMineruConnection } from './parsers'
+import { getKnowledgeBaseVectorStore } from './vector-store'
 
 const log = getLogger('knowledge-base:ipc-handlers')
-
-interface VectorStoreWithTurso {
-  turso: {
-    execute(params: { sql: string; args: unknown[] }): Promise<{
-      rows: Array<Record<string, unknown>>
-      rowsAffected?: number
-    }>
-  }
-}
 
 function reportKnowledgeBaseFileActionError(
   error: unknown,
@@ -214,7 +206,7 @@ export function registerKnowledgeBaseHandlers() {
 
       await withTransaction(async () => {
         const db = getDatabase()
-        const vectorStore = getVectorStore()
+        const vectorStore = getKnowledgeBaseVectorStore()
 
         // Verify knowledge base exists before deletion
         const kbExists = await db.execute('SELECT id FROM knowledge_base WHERE id = ?', [kbId])
@@ -237,8 +229,8 @@ export function registerKnowledgeBaseHandlers() {
         log.info(`[IPC] Deleted knowledge base record for kbId=${kbId}`)
 
         // 3. Delete vector index
-        await vectorStore.deleteIndex({ indexName: `kb_${kbId}` })
-        log.info(`[IPC] Deleted vector index for kbId=${kbId}`)
+        await vectorStore.deleteIndex(`kb_${kbId}`)
+        log.info(`[IPC] Deleted vector index (${vectorStore.provider}) for kbId=${kbId}`)
       })
 
       return { success: true }
@@ -664,7 +656,6 @@ export function registerKnowledgeBaseHandlers() {
       return await withTransaction(
         async () => {
           const db = getDatabase()
-          const vectorStore = getVectorStore()
 
           // Find file information
           const rs = await db.execute({
@@ -678,30 +669,17 @@ export function registerKnowledgeBaseHandlers() {
 
           const indexName = `kb_${file.kb_id}`
 
-          // Delete embedding data - use vectorStore.turso for direct operation
+          // Delete embedding data from the active vector store provider
           log.info(`[IPC] Deleting vectors: fileId=${fileId}, indexName=${indexName}`)
-          const vectorDb = (vectorStore as unknown as VectorStoreWithTurso).turso
 
           try {
-            // First query the number of vectors to delete
-            const countResult = await vectorDb.execute({
-              sql: `SELECT COUNT(*) as count FROM ${indexName} WHERE json_extract(metadata, '$.fileId') = ?`,
-              args: [fileId],
-            })
-            const vectorCount = Number(countResult.rows[0]?.count || 0)
-            log.info(`[IPC] Found ${vectorCount} vectors to delete`)
-
-            if (vectorCount > 0) {
-              // Delete vector data
-              const deleteResult = await vectorDb.execute({
-                sql: `DELETE FROM ${indexName} WHERE json_extract(metadata, '$.fileId') = ?`,
-                args: [fileId],
-              })
-              const rowsDeleted = Number(deleteResult.rowsAffected || 0)
-              log.info(`[IPC] Deleted ${rowsDeleted} vectors`)
-            } else {
-              log.info(`[IPC] No vectors to delete`)
-            }
+            const vectorStore = getKnowledgeBaseVectorStore()
+            const deleted = await vectorStore.deleteVectorsByFileId(indexName, fileId)
+            log.info(
+              deleted > 0
+                ? `[IPC] Deleted ${deleted} vectors via ${vectorStore.provider} provider`
+                : `[IPC] No vectors to delete`
+            )
           } catch (vectorDeleteErr: unknown) {
             log.error(`[IPC] Failed to delete vectors: fileId=${fileId}`, vectorDeleteErr)
             // Continue with file record deletion even if vector deletion fails

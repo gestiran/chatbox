@@ -160,6 +160,10 @@ export function settings(): Settings {
           embedding: undefined,
           rerank: undefined,
         },
+        vectorStore: {
+          provider: 'default',
+          qdrantUrl: '',
+        },
       },
       // documentParser is NOT set here - it uses platform-specific defaults
       // Desktop: 'local', Mobile/Web: 'none'

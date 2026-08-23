@@ -10,10 +10,11 @@ import { rerank } from '../../shared/models/rerank'
 import type { DocumentParserConfig } from '../../shared/types/settings'
 import { sentry } from '../adapters/sentry'
 import { getLogger } from '../util'
-import { checkProcessingTimeouts, getDatabase, getVectorStore } from './db'
+import { checkProcessingTimeouts, getDatabase } from './db'
 import { isExpectedKnowledgeBaseRerankError } from './error-reporting'
 import { getEmbeddingProvider, getRerankProvider } from './model-providers'
 import { getEffectiveParserConfig, type ParserFileMeta, parseFileWithRouter } from './parsers'
+import { getKnowledgeBaseVectorStore } from './vector-store'
 
 const log = getLogger('knowledge-base:file-loaders')
 
@@ -161,7 +162,7 @@ export async function processFileWithMastra(
 
     // 6. Process remaining chunks in batches
     const embeddingInstance = await getEmbeddingProvider(kbId)
-    const vectorStore = getVectorStore()
+    const vectorStore = getKnowledgeBaseVectorStore()
     const indexName = `kb_${kbId}`
     const BATCH_SIZE = 50 // Process chunks in batches of 50
 
@@ -172,7 +173,7 @@ export async function processFileWithMastra(
       // Embeddings are billable; network-error retries could double-charge.
       maxRetries: 0,
     })
-    await vectorStore.createIndex({ indexName, dimension: firstEmbedding.embeddings[0].length })
+    await vectorStore.createIndex(indexName, firstEmbedding.embeddings[0].length)
 
     for (let i = 0; i < remainingChunks.length; i += BATCH_SIZE) {
       // Check if file has been paused before processing each batch
@@ -206,17 +207,17 @@ export async function processFileWithMastra(
 
       // Store vectors for this batch
       log.debug(`[FILE] Storing batch ${batchNumber}/${totalBatches} to vector store`)
-      await vectorStore.upsert({
+      await vectorStore.upsert(
         indexName,
-        vectors: embeddingResult.embeddings,
-        metadata: batchChunks.map((chunk: any, chunkIndex: number) => ({
+        embeddingResult.embeddings,
+        batchChunks.map((chunk: any, chunkIndex: number) => ({
           text: chunk.text,
           fileId: fileMeta.fileId,
           filename: fileMeta.filename,
           mimeType: fileMeta.mimeType,
           chunkIndex: currentChunkCount + i + chunkIndex, // Use absolute chunk index
-        })),
-      })
+        }))
+      )
 
       // Update processed chunk count in database
       const newChunkCount = currentChunkCount + i + batchChunks.length
@@ -413,13 +414,9 @@ export async function searchKnowledgeBase(kbId: number, query: string) {
       // Embeddings are billable; network-error retries could double-charge.
       maxRetries: 0,
     })
-    const vectorStore = getVectorStore()
+    const vectorStore = getKnowledgeBaseVectorStore()
     const indexName = `kb_${kbId}`
-    const results = await vectorStore.query({
-      indexName,
-      queryVector: embedding.embeddings[0],
-      topK: 20,
-    })
+    const results = await vectorStore.query(indexName, embedding.embeddings[0], 20)
     try {
       const rerankInstance = await getRerankProvider(kbId)
       if (rerankInstance) {
@@ -474,7 +471,7 @@ export async function searchKnowledgeBase(kbId: number, query: string) {
   }
 }
 
-// Read chunks from vector store
+// Read chunks from the active vector store
 export async function readChunks(kbId: number, chunks: { fileId: number; chunkIndex: number }[]) {
   try {
     log.debug(`[FILE] Reading chunks: kbId=${kbId}, chunks=${chunks.length}`)
@@ -483,41 +480,15 @@ export async function readChunks(kbId: number, chunks: { fileId: number; chunkIn
       return []
     }
 
-    const indexName = `kb_${kbId}`
     const results: any[] = []
 
-    // Use single SQL query to get all chunks at once
-    log.debug(`[FILE] Using single SQL query via vectorStore.turso for ${chunks.length} chunks`)
+    const indexName = `kb_${kbId}`
+    const vectorStore = getKnowledgeBaseVectorStore()
 
-    const vectorStore = getVectorStore()
-    // Build composite IN condition to avoid SQLite's 999 variable limit
-    const valuePlaceholders = chunks.map(() => '(?,?)').join(',')
-    const condition = `(json_extract(metadata, '$.fileId'), json_extract(metadata, '$.chunkIndex')) IN (${valuePlaceholders})`
+    log.debug(`[FILE] Fetching ${chunks.length} chunks from ${vectorStore.provider} vector store`)
+    const foundChunks = await vectorStore.fetchChunksByFileAndChunkIndexes(indexName, chunks)
 
-    // Flatten chunk parameters for the query
-    const args = chunks.flatMap((c) => [c.fileId, c.chunkIndex])
-
-    const sql = `SELECT metadata FROM ${indexName} WHERE ${condition}`
-    log.debug(`[FILE] Executing SQL: ${sql}`)
-    log.debug(`[FILE] With args:`, args)
-
-    const queryResult = await (vectorStore as any).turso.execute({
-      sql,
-      args,
-    })
-
-    log.debug(`[FILE] Single SQL query returned ${queryResult.rows.length} results`)
-
-    // Parse results and maintain the order requested by chunks array
-    const foundChunks = queryResult.rows.map((row: any) => {
-      const metadata = JSON.parse(row.metadata as string)
-      return {
-        fileId: metadata.fileId,
-        filename: metadata.filename,
-        chunkIndex: metadata.chunkIndex,
-        text: metadata.text,
-      }
-    })
+    log.debug(`[FILE] Fetched ${foundChunks.length} chunks from ${vectorStore.provider} vector store`)
 
     // Maintain the order of the requested chunks
     for (const chunk of chunks) {
