@@ -75,6 +75,9 @@ export class MCPServer extends Emittery<{ status: MCPServerStatus }> {
   private _status: MCPServerStatus = { state: 'idle' }
   private client?: MCPClient
   private tools?: ToolSet
+  // Serializes lifecycle operations so concurrent triggers (e.g. two chats
+  // sending messages at once) cannot interleave start/stop/reconnect steps.
+  private lifecycleQueue: Promise<unknown> = Promise.resolve()
 
   constructor(private readonly transportConfig: TransportConfig) {
     super()
@@ -89,10 +92,45 @@ export class MCPServer extends Emittery<{ status: MCPServerStatus }> {
     this.emit('status', status)
   }
 
+  private runSerialized<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.lifecycleQueue.then(operation)
+    // Keep the queue chain alive regardless of operation failures.
+    this.lifecycleQueue = result.catch(() => undefined)
+    return result
+  }
+
   async start() {
-    if (this.status.state !== 'idle') {
-      return
-    }
+    return this.runSerialized(() => {
+      if (this.status.state !== 'idle') {
+        return Promise.resolve()
+      }
+      return this.connect()
+    })
+  }
+
+  /**
+   * Drops any existing client and performs a fresh connection attempt whatever
+   * the current status is. Used to recover servers that failed to start or
+   * whose process died, e.g. right before sending a chat message.
+   */
+  async reconnect(): Promise<void> {
+    return this.runSerialized(async () => {
+      const staleClient = this.client
+      this.client = undefined
+      this.tools = undefined
+      if (staleClient) {
+        try {
+          await staleClient.close()
+        } catch (err) {
+          console.error('mcp:client:close', err)
+        }
+      }
+      this.status = { state: 'idle' }
+      await this.connect()
+    })
+  }
+
+  private async connect(): Promise<void> {
     this.status = { state: 'starting' }
     try {
       this.client = await createClient(this.transportConfig)
@@ -109,13 +147,15 @@ export class MCPServer extends Emittery<{ status: MCPServerStatus }> {
   }
 
   async stop() {
-    if (this.status.state !== 'running') {
-      return
-    }
-    this.status = { state: 'stopping' }
-    await this.client?.close()
-    this.tools = undefined
-    this.status = { state: 'idle' }
+    return this.runSerialized(async () => {
+      if (this.status.state !== 'running') {
+        return
+      }
+      this.status = { state: 'stopping' }
+      await this.client?.close()
+      this.tools = undefined
+      this.status = { state: 'idle' }
+    })
   }
 
   getAvailableTools(): ToolSet {
@@ -143,6 +183,17 @@ export const mcpController = {
     if (!serverConfig.enabled) {
       return
     }
+
+    const existing = this.servers.get(serverConfig.id)
+    if (existing) {
+      // Already managed (possibly started by another chat or during bootstrap).
+      // Reuse the instance instead of replacing it, otherwise concurrent
+      // senders would spawn duplicate processes/clients for the same server;
+      // start() is a no-op while it is already starting or running.
+      await existing.instance.start()
+      return
+    }
+
     const server = new MCPServer(serverConfig.transport)
     this.servers.set(serverConfig.id, { instance: server, config: serverConfig })
 

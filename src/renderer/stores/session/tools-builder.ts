@@ -1,9 +1,11 @@
+import { McpUnavailableError } from '@shared/models/errors'
 import type { ModelInterface } from '@shared/models/types'
 import type { SandboxProvider } from '@shared/sandbox-provider'
 import type { KnowledgeBase, Message, SessionSettings } from '@shared/types'
 import type { UserExecApprovalSource } from '@shared/types/user-exec'
 import { getMessageText } from '@shared/utils/message'
 import { jsonSchema, type ToolSet } from 'ai'
+import { t } from 'i18next'
 import { trackAgentModeFullAccessBypass } from '@/analytics/agent-mode'
 import { mcpController } from '@/packages/mcp/controller'
 import { generateCommandExplanation } from '@/packages/model-calls/command-explanation'
@@ -14,7 +16,11 @@ import { buildFilesystemTools } from '@/packages/model-calls/toolsets/filesystem
 import { getToolSet as getKBToolSet } from '@/packages/model-calls/toolsets/knowledge-base'
 import { asRecord, numberField, stringField, toTextModelOutput } from '@/packages/model-calls/toolsets/model-output'
 import { remapPhantomHomePath } from '@/packages/model-calls/toolsets/sandbox-paths'
-import { ensureSessionMcpServersRunning, getSessionMcpAllowList } from '@/packages/mcp/session-mcp'
+import {
+  ensureSessionMcpServersAvailable,
+  getSessionMcpAllowList,
+  type UnavailableMcpServer,
+} from '@/packages/mcp/session-mcp'
 import { getToolSet as getSessionAttachmentRagToolSet } from '@/packages/model-calls/toolsets/session-attachment-rag'
 import { getToolSetDescription, parseLinkTool, webSearchTool } from '@/packages/model-calls/toolsets/web-search'
 import { skillsController, subscribeSkillsChanged } from '@/packages/skills/controller'
@@ -46,6 +52,25 @@ export function resetSkillsCache(): void {
 }
 
 subscribeSkillsChanged(resetSkillsCache)
+
+/**
+ * Builds the error thrown when an MCP server that is active for this chat
+ * stayed unavailable after an automatic reconnection attempt. The message
+ * names every affected server (plus its last known connection error) so the
+ * user knows what to fix before retrying.
+ */
+function buildMcpUnavailableError(unavailableMcpServers: UnavailableMcpServer[]): McpUnavailableError {
+  const serverNames = unavailableMcpServers.map((server) => server.name)
+  const quotedNames = serverNames.map((name) => `"${name}"`).join(', ')
+  const message =
+    t(
+      'MCP server {{serverNames}} is unavailable. Automatic reconnection failed and the request was aborted. Please check the server in Settings - MCP and try again.',
+      { serverNames: quotedNames }
+    ) +
+    '\n' +
+    unavailableMcpServers.map((server) => `- ${server.name}${server.reason ? `: ${server.reason}` : ''}`).join('\n')
+  return new McpUnavailableError(serverNames, message)
+}
 
 export interface BuildToolsOptions {
   sessionId?: string
@@ -306,7 +331,13 @@ In long conversations, earlier tool call results may be automatically compressed
     // selection (independent of other chats); otherwise it follows the global
     // enabled servers. Processes are shared and only ever started here, never
     // stopped by per-chat changes, so background chats keep their tools.
-    ensureSessionMcpServersRunning(options.sessionSettings)
+    // Unavailable servers are reconnected once; if a server still cannot be
+    // reached, abort the request with an error naming that server instead of
+    // silently sending a request without its tools.
+    const unavailableMcpServers = await ensureSessionMcpServersAvailable(options.sessionSettings)
+    if (unavailableMcpServers.length > 0) {
+      throw buildMcpUnavailableError(unavailableMcpServers)
+    }
     tools = {
       ...mcpController.getAvailableTools({ enabledServerIds: getSessionMcpAllowList(options.sessionSettings) }),
     }

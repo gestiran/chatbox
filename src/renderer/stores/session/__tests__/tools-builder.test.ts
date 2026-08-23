@@ -16,6 +16,8 @@ const {
   requestUserExecApprovalMock,
   cancelUserExecMock,
   userExecMock,
+  ensureSessionMcpServersAvailableMock,
+  getSessionMcpAllowListMock,
 } = vi.hoisted(() => ({
   discoverSkillsMock: vi.fn(),
   installFromSandboxMock: vi.fn(),
@@ -36,6 +38,8 @@ const {
   requestUserExecApprovalMock: vi.fn(),
   cancelUserExecMock: vi.fn(),
   userExecMock: vi.fn(),
+  ensureSessionMcpServersAvailableMock: vi.fn(),
+  getSessionMcpAllowListMock: vi.fn(),
 }))
 
 vi.hoisted(() => {
@@ -58,6 +62,13 @@ vi.mock('@/platform', () => ({
   default: { type: 'web' },
 }))
 
+// Deterministic translations: the MCP unavailability message is asserted by
+// its server name, which is interpolated into the sentence key.
+vi.mock('i18next', () => ({
+  t: (key: string, options?: Record<string, unknown>) =>
+    key.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(options?.[name] ?? '')),
+}))
+
 const trackAgentModeFullAccessBypassMock = vi.fn()
 vi.mock('@/analytics/agent-mode', () => ({
   trackAgentModeFullAccessBypass: (...args: unknown[]) => trackAgentModeFullAccessBypassMock(...args),
@@ -69,6 +80,11 @@ vi.mock('@/packages/mcp/controller', () => ({
       mcp_tool: { execute: async () => ({}) },
     }),
   },
+}))
+
+vi.mock('@/packages/mcp/session-mcp', () => ({
+  ensureSessionMcpServersAvailable: (...args: unknown[]) => ensureSessionMcpServersAvailableMock(...args),
+  getSessionMcpAllowList: (...args: unknown[]) => getSessionMcpAllowListMock(...args),
 }))
 
 vi.mock('@/packages/skills/controller', () => ({
@@ -161,6 +177,7 @@ vi.mock('@/packages/model-calls/toolsets/session-attachment-rag', () => ({
 }))
 
 import type { ModelInterface } from '@shared/models/types'
+import { McpUnavailableError } from '@shared/models/errors'
 import type { SandboxProvider } from '@shared/sandbox-provider'
 import type { Message } from '@shared/types'
 import { type BuildToolsOptions, buildToolsForSession } from '../tools-builder'
@@ -234,6 +251,8 @@ beforeEach(() => {
   requestUserExecApprovalMock.mockResolvedValue('ai')
   userExecMock.mockResolvedValue({ success: true, exitCode: 0, stdout: 'ok', stderr: '' })
   cancelUserExecMock.mockResolvedValue({ killed: true })
+  ensureSessionMcpServersAvailableMock.mockResolvedValue([])
+  getSessionMcpAllowListMock.mockReturnValue([])
   installFromSandboxMock.mockResolvedValue({ success: true, skillName: 'new-skill' })
   discoverSkillsMock.mockResolvedValue([
     { name: 'test-skill', description: 'A test skill' },
@@ -346,6 +365,30 @@ describe('buildToolsForSession', () => {
     expect(result.tools.mcp_tool).toBeDefined()
     expect(result.tools.load_skill).toBeDefined()
     expect(result.tools.list_files).toBeDefined()
+  })
+
+  test('aborts the request when an active MCP server stays unavailable after reconnection', async () => {
+    ensureSessionMcpServersAvailableMock.mockResolvedValue([
+      { id: 'srv-1', name: 'Broken MCP', reason: 'connection refused' },
+    ])
+    const model = createMockModel()
+
+    await expect(
+      buildToolsForSession(model, { webBrowsing: false, messages: [], agentMode: 'on' })
+    ).rejects.toThrow(McpUnavailableError)
+
+    await expect(
+      buildToolsForSession(model, { webBrowsing: false, messages: [], agentMode: 'on' })
+    ).rejects.toThrow(/Broken MCP/)
+  })
+
+  test('collects MCP tools when every active server is available', async () => {
+    ensureSessionMcpServersAvailableMock.mockResolvedValue([])
+    const model = createMockModel()
+
+    const result = await buildToolsForSession(model, { webBrowsing: false, messages: [], agentMode: 'on' })
+
+    expect(result.tools.mcp_tool).toBeDefined()
   })
 
   test('normalizes Windows paths and prefers PowerShell without redundant directory changes', async () => {

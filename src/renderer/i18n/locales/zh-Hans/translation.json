@@ -1289,5 +1289,6 @@
   "Long tasks pause for confirmation after every {{count}} steps so you can check they're on track. Individual chats can override this in their conversation settings.": "长任务每执行 {{count}} 步会暂停等待确认，方便你检查任务是否在正轨上。各对话可在其对话设置中单独覆盖此设置。",
   "{{count}} operation(s) awaiting approval": "{{count}} 个操作等待批准",
   "Notify when chat completes": "聊天完成时通知",
-  "Show a system notification with the chat title when a chat finishes its work.": "当聊天完成工作时，显示包含聊天标题的系统通知。"
+  "Show a system notification with the chat title when a chat finishes its work.": "当聊天完成工作时，显示包含聊天标题的系统通知。",
+  "MCP server {{serverNames}} is unavailable. Automatic reconnection failed and the request was aborted. Please check the server in Settings - MCP and try again.": "MCP 服务器 {{serverNames}} 不可用。自动重新连接失败，请求已中止。请在 设置 - MCP 中检查该服务器后重试。"
 }

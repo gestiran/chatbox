@@ -7,6 +7,49 @@ interface RecordedRequest {
   protocolVersion: string | null
 }
 
+// A healthy 2025-11-25 Streamable HTTP server exposing a single `echo` tool.
+function stubWorkingPhpSdkFetch() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined
+      if ((init?.method ?? 'GET') === 'GET') {
+        return new Response(null, { status: 405, statusText: 'Method Not Allowed' })
+      }
+      if (body?.method === 'initialize') {
+        return Response.json({
+          jsonrpc: '2.0',
+          id: body.id,
+          result: {
+            protocolVersion: '2025-11-25',
+            capabilities: { tools: {} },
+            serverInfo: { name: 'php-sdk', version: '0.7.0' },
+          },
+        })
+      }
+      if (body?.method === 'notifications/initialized') {
+        return new Response(null, { status: 202 })
+      }
+      if (body?.method === 'tools/list') {
+        return Response.json({
+          jsonrpc: '2.0',
+          id: body.id,
+          result: {
+            tools: [
+              {
+                name: 'echo',
+                description: 'Echo the input text',
+                inputSchema: { type: 'object', properties: {}, required: [] },
+              },
+            ],
+          },
+        })
+      }
+      return Response.json({ jsonrpc: '2.0', id: body.id, result: { content: [] } })
+    })
+  )
+}
+
 describe('MCPServer HTTP transport', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -157,5 +200,66 @@ describe('MCPServer HTTP transport', () => {
       "Streamable HTTP connection failed: Server's protocol version is not supported: 2099-01-01"
     )
     expect(server.status.error).toContain('Legacy SSE fallback failed: MCP SSE Transport Error: 405 Method Not Allowed')
+  })
+
+  it('reconnects with a fresh client after a failed start', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 500, statusText: 'Internal Server Error' }))
+    )
+
+    const server = new MCPServer({
+      type: 'http',
+      url: 'https://php-sdk.example.com/mcp',
+    })
+
+    await server.start()
+    expect(server.status.state).toBe('idle')
+    expect(server.status.error).toBeTruthy()
+    expect(server.getAvailableTools()).toEqual({})
+
+    // The server comes back online; reconnect() must attempt a fresh
+    // connection instead of keeping the failed one.
+    stubWorkingPhpSdkFetch()
+
+    await server.reconnect()
+
+    expect(server.status).toEqual({ state: 'running' })
+    await server.stop()
+  })
+
+  it('reconnect() reports the failure when a running server goes down, then recovers', async () => {
+    stubWorkingPhpSdkFetch()
+
+    const server = new MCPServer({
+      type: 'http',
+      url: 'https://php-sdk.example.com/mcp',
+    })
+
+    await server.start()
+    expect(server.status).toEqual({ state: 'running' })
+    expect(Object.keys(server.getAvailableTools())).toEqual(['echo'])
+
+    // The server goes down; reconnect must surface the failure instead of
+    // silently keeping the stale "running" status.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('connection refused')
+      })
+    )
+    await server.reconnect()
+    expect(server.status.state).toBe('idle')
+    // The SDK may wrap the transport failure, so only check that a reason survived.
+    expect(server.status.error).toBeTruthy()
+    expect(server.getAvailableTools()).toEqual({})
+
+    // ...and a later reconnect recovers once the server is back.
+    stubWorkingPhpSdkFetch()
+    await server.reconnect()
+    expect(server.status).toEqual({ state: 'running' })
+    expect(Object.keys(server.getAvailableTools())).toEqual(['echo'])
+
+    await server.stop()
   })
 })

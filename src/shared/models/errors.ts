@@ -75,6 +75,20 @@ export class OCRError extends BaseError {
   }
 }
 
+/**
+ * An MCP server that is active for the current chat could not be reached even
+ * after an automatic reconnection attempt. Carries the affected server names so
+ * the UI (and error reports) can tell the user exactly which server failed.
+ */
+export class McpUnavailableError extends BaseError {
+  public code = 10007
+  public readonly serverNames: string[]
+  constructor(serverNames: string[], message?: string) {
+    super(message ?? `MCP server ${serverNames.map((name) => `"${name}"`).join(', ')} is unavailable`)
+    this.serverNames = serverNames
+  }
+}
+
 // 20000 - 29999 为 Chatbox AI 服务错误
 
 // Chatbox AI 服务错误

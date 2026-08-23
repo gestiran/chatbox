@@ -25,14 +25,11 @@ export function getSessionMcpAllowList(sessionSettings?: SessionSettings): strin
   return [...customIds, ...builtinIds]
 }
 
-/**
- * Starts shared processes for any server in the chat's allow-list that is not
- * running yet. Idempotent; failures are logged and never throw.
- */
-export function ensureSessionMcpServersRunning(sessionSettings?: SessionSettings): void {
-  for (const id of getSessionMcpAllowList(sessionSettings)) {
-    startMcpServerProcess(id)
-  }
+export interface UnavailableMcpServer {
+  id: string
+  name: string
+  /** Last connection error reported by the server, when known. */
+  reason?: string
 }
 
 /**
@@ -54,6 +51,63 @@ export function startMcpServerProcess(id: string): void {
   mcpController.startServer(runnableConfig).catch((error) => {
     console.warn('mcp: failed to start server for chat:', id, error)
   })
+}
+
+function resolveMcpServerConfig(id: string): MCPServerConfig | null {
+  const globalMcp = readGlobalMcpSettings()
+  return getBuiltinServerConfig(id) ?? globalMcp.servers.find((server) => server.id === id) ?? null
+}
+
+/**
+ * Called right before message generation: makes sure every MCP server active
+ * in this chat is reachable.
+ *
+ * - Servers never started here are started and awaited (instead of the usual
+ *   fire-and-forget) so the outcome is known before the request goes out.
+ * - Servers registered in the controller but not running (a previous start
+ *   failed, or the process died) are reconnected exactly once.
+ *
+ * Returns the servers that remained unavailable after the reconnect attempt so
+ * the caller can abort the request with an actionable error.
+ */
+export async function ensureSessionMcpServersAvailable(
+  sessionSettings?: SessionSettings
+): Promise<UnavailableMcpServer[]> {
+  const allowList = getSessionMcpAllowList(sessionSettings)
+  const results = await Promise.all(
+    allowList.map(async (id): Promise<UnavailableMcpServer | null> => {
+      let instance = mcpController.getServer(id)
+      if (!instance) {
+        const config = resolveMcpServerConfig(id)
+        if (!config) {
+          return null
+        }
+        // A globally disabled custom server can still be enabled per chat.
+        const runnableConfig = config.enabled ? config : { ...cloneDeep(config), enabled: true }
+        await mcpController.startServer(runnableConfig).catch((error) => {
+          console.warn('mcp: failed to start server for chat:', id, error)
+        })
+        instance = mcpController.getServer(id)
+      } else if (instance.status.state !== 'running') {
+        // Registered but not usable: drop the stale client and reconnect once.
+        await instance.reconnect().catch((error) => {
+          console.warn('mcp: reconnect failed for server:', id, error)
+        })
+      }
+      if (instance?.status.state !== 'running') {
+        const config = resolveMcpServerConfig(id)
+        if (config) {
+          return {
+            id,
+            name: config.name,
+            ...(instance?.status.error ? { reason: instance.status.error } : {}),
+          }
+        }
+      }
+      return null
+    })
+  )
+  return results.filter((entry): entry is UnavailableMcpServer => entry !== null)
 }
 
 /** Tolerates partially initialized settings (e.g. early startup, tests). */
