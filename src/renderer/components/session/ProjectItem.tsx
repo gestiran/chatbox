@@ -129,9 +129,10 @@ function ProjectItem({ project, chatCount, expanded, active = false }: Props) {
         pr="xs"
         py={8}
         h={36}
+        style={active ? { backgroundColor: 'var(--chatbox-background-brand-dimmed)' } : undefined}
         className={clsx(
           'cursor-pointer select-none rounded-lg group/project-item',
-          active ? 'bg-chatbox-background-brand-secondary' : 'hover:bg-chatbox-background-gray-secondary'
+          !active && 'hover:bg-chatbox-background-gray-secondary'
         )}
         onClick={handleToggleFoldout}
         onContextMenu={handleContextMenu}
@@ -147,7 +148,10 @@ function ProjectItem({ project, chatCount, expanded, active = false }: Props) {
         <ScalableIcon
           icon={IconFolder}
           size={18}
-          className={clsx('shrink-0', active ? 'text-chatbox-brand' : 'text-[var(--chatbox-tint-secondary)]')}
+          className={clsx(
+            'shrink-0',
+            active ? 'text-chatbox-brand opacity-60' : 'text-[var(--chatbox-tint-secondary)]'
+          )}
         />
 
         <Text
@@ -155,6 +159,7 @@ function ProjectItem({ project, chatCount, expanded, active = false }: Props) {
           flex={1}
           lineClamp={1}
           c={active ? 'chatbox-brand' : 'chatbox-primary'}
+          className={active ? 'opacity-60' : undefined}
           fw={500}
           data-testid={TestId.sidebar.projectTitle}
         >

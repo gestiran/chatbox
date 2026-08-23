@@ -62,6 +62,8 @@
   --chatbox-background-brand-primary-hover: color-mix(in srgb, var(--chatbox-brand), black 12%);
   --chatbox-background-brand-secondary: color-mix(in srgb, var(--chatbox-brand), transparent 92%);
   --chatbox-background-brand-secondary-hover: color-mix(in srgb, var(--chatbox-brand), transparent 84%);
+  /* Half-strength brand highlight (e.g. active project row vs. active chat row). */
+  --chatbox-background-brand-dimmed: color-mix(in srgb, var(--chatbox-brand), transparent 96%);
 
   --chatbox-background-gray-primary: #868e96;
   --chatbox-background-gray-primary-hover: #495057;
@@ -146,6 +148,8 @@
   --chatbox-background-brand-primary-hover: color-mix(in srgb, var(--chatbox-brand), black 12%);
   --chatbox-background-brand-secondary: color-mix(in srgb, var(--chatbox-brand), transparent 80%);
   --chatbox-background-brand-secondary-hover: color-mix(in srgb, var(--chatbox-brand), transparent 76%);
+  /* Half-strength brand highlight (e.g. active project row vs. active chat row). */
+  --chatbox-background-brand-dimmed: color-mix(in srgb, var(--chatbox-brand), transparent 90%);
 
   --chatbox-background-gray-primary: #343a40;
   --chatbox-background-gray-primary-hover: #212529;
