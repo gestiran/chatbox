@@ -1319,5 +1319,18 @@
   "Select additional languages for spell checking. Leave empty to use the system language.": "Select additional languages for spell checking. Leave empty to use the system language.",
   "System language": "System language",
   "QDrant URL": "QDrant URL",
-  "URL of the QDrant database that all requests are sent to. Leave empty to use the local instance at http://127.0.0.1:6333.": "URL of the QDrant database that all requests are sent to. Leave empty to use the local instance at http://127.0.0.1:6333."
+  "URL of the QDrant database that all requests are sent to. Leave empty to use the local instance at http://127.0.0.1:6333.": "URL of the QDrant database that all requests are sent to. Leave empty to use the local instance at http://127.0.0.1:6333.",
+  "Chunk Size": "Chunk Size",
+  "Maximum size of one text chunk. Cannot be changed after the base is created.": "Maximum size of one text chunk. Cannot be changed after the base is created.",
+  "Update": "Update",
+  "Check all files for changes": "Check all files for changes",
+  "Re-index all modified files": "Re-index all modified files",
+  "{{count}} file(s) changed on disk since indexing": "{{count}} file(s) changed on disk since indexing",
+  "All files are up to date": "All files are up to date",
+  "Failed to check file hashes: {{error}}": "Failed to check file hashes: {{error}}",
+  "Updating {{count}} file(s)...": "Updating {{count}} file(s)...",
+  "Failed to update files: {{error}}": "Failed to update files: {{error}}",
+  "Open file location": "Open file location",
+  "Modified": "Modified",
+  "Check for changes": "Check for changes"
 }

@@ -15,6 +15,7 @@ class DesktopKnowledgeBaseController implements KnowledgeBaseController {
     embeddingModel: string
     rerankModel: string
     visionModel?: string
+    chunkSize?: number
   }) {
     await this.ipc.invoke('kb:create', createParams)
   }
@@ -71,6 +72,18 @@ class DesktopKnowledgeBaseController implements KnowledgeBaseController {
 
   async readFileChunks(kbId: number, chunks: { fileId: number; chunkIndex: number }[]) {
     return this.ipc.invoke('kb:file:read-chunks', kbId, chunks)
+  }
+
+  async checkFileHashes(kbId: number, fileIds?: number[]) {
+    return this.ipc.invoke('kb:hash:check', kbId, fileIds)
+  }
+
+  async updateFiles(kbId: number, fileIds: number[]) {
+    return this.ipc.invoke('kb:files:update', kbId, fileIds)
+  }
+
+  async showItemInFolder(filePath: string) {
+    return this.ipc.invoke('shell:show-item-in-folder', filePath)
   }
 }
 

@@ -356,9 +356,25 @@ export interface KnowledgeBase {
   embeddingModel: string
   rerankModel: string
   visionModel?: string
+  // Chunk size (characters) chosen at creation time. Read-only afterwards.
+  chunkSize?: number
   providerMode?: KnowledgeBaseProviderMode
   documentParser?: DocumentParserConfig
   createdAt: number
+}
+
+/**
+ * Result of comparing a file's current on-disk SHA-256 hash against the hash
+ * stored in the vector store payload (`fileHash`). A file is "modified" when
+ * its stored hash is missing or differs from the current disk content.
+ */
+export interface KnowledgeBaseHashCheckResult {
+  fileId: number
+  /** Current sha-256 of the file on disk; null when the file is missing. */
+  diskHash: string | null
+  /** Hash recorded in the vector store points; null when absent. */
+  storedHash: string | null
+  modified: boolean
 }
 
 export interface KnowledgeBaseFile {

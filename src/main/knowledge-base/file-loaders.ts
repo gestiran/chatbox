@@ -1,13 +1,19 @@
 import { setTimeout } from 'node:timers/promises'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { MDocument } from '@mastra/rag'
 import { embedMany } from 'ai'
 import {
+  KNOWLEDGE_BASE_CHUNK_SIZES,
+  KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE,
   KNOWLEDGE_BASE_MAX_PARSED_CONTENT_SIZE,
   KNOWLEDGE_BASE_PARSED_CONTENT_TOO_LARGE_ERROR,
 } from '../../shared/knowledge-base'
 import { ChatboxAIAPIError } from '../../shared/models/errors'
 import { rerank } from '../../shared/models/rerank'
 import type { DocumentParserConfig } from '../../shared/types/settings'
+import type { DocumentParserConfig } from '../../shared/types/settings'
+import type { KnowledgeBaseHashCheckResult } from '../../shared/types'
 import { sentry } from '../adapters/sentry'
 import { getLogger } from '../util'
 import { checkProcessingTimeouts, getDatabase } from './db'
@@ -17,6 +23,34 @@ import { getEffectiveParserConfig, type ParserFileMeta, parseFileWithRouter } fr
 import { getKnowledgeBaseVectorStore } from './vector-store'
 
 const log = getLogger('knowledge-base:file-loaders')
+
+/**
+ * SHA-256 hash of a file's current on-disk content. Used to detect files that
+ * changed since they were indexed into the vector store.
+ */
+export function computeFileHash(filePath: string): string | null {
+  try {
+    if (!existsSync(filePath)) {
+      return null
+    }
+    return createHash('sha256').update(readFileSync(filePath)).digest('hex')
+  } catch (error: unknown) {
+    log.warn(`[FILE] Failed to compute hash for ${filePath}:`, error)
+    return null
+  }
+}
+
+/**
+ * Resolve the chunk size configured for a knowledge base. Bases created
+ * before the setting existed (or with an out-of-range value) fall back to the
+ * default chunk size.
+ */
+async function resolveChunkSize(kbId: number): Promise<number> {
+  const db = getDatabase()
+  const rs = await db.execute('SELECT chunk_size FROM knowledge_base WHERE id = ?', [kbId])
+  const value = Number(rs.rows[0]?.chunk_size)
+  return KNOWLEDGE_BASE_CHUNK_SIZES.includes(value) ? value : KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE
+}
 
 /**
  * Parse error message to extract user-friendly message
@@ -113,10 +147,11 @@ export async function processFileWithMastra(
     })
 
     // 2. Chunking
+    const chunkSize = await resolveChunkSize(kbId)
     const allChunks = await doc.chunk({
       strategy: 'recursive',
-      maxSize: 1200,
-      overlap: 150,
+      maxSize: chunkSize,
+      overlap: Math.min(150, Math.floor(chunkSize / 4)),
     })
 
     if (!allChunks || allChunks.length === 0) {
@@ -149,6 +184,10 @@ export async function processFileWithMastra(
       log.info(`[FILE] File processing already complete: ${fileMeta.filename} (id=${fileMeta.fileId})`)
       return
     }
+
+    // Hash of the file content, stored in every point payload so that later
+    // "Refresh" checks can detect files modified after indexing.
+    const fileHash = computeFileHash(filePath)
 
     // 6. Process remaining chunks in batches
     const embeddingInstance = await getEmbeddingProvider(kbId)
@@ -205,6 +244,7 @@ export async function processFileWithMastra(
           fileId: fileMeta.fileId,
           filename: fileMeta.filename,
           mimeType: fileMeta.mimeType,
+          fileHash,
           chunkIndex: currentChunkCount + i + chunkIndex, // Use absolute chunk index
         }))
       )
@@ -497,4 +537,94 @@ export async function readChunks(kbId: number, chunks: { fileId: number; chunkIn
     })
     throw sqlErr
   }
+}
+
+/**
+ * Compare each file's current on-disk sha-256 hash against the `fileHash`
+ * stored in the vector store payload. A file is reported as modified when its
+ * stored hash is missing or differs from the current disk content.
+ *
+ * When `fileIds` is omitted, every file of the knowledge base is checked.
+ */
+export async function checkKnowledgeBaseFilesHashes(
+  kbId: number,
+  fileIds?: number[]
+): Promise<KnowledgeBaseHashCheckResult[]> {
+  const db = getDatabase()
+  const vectorStore = getKnowledgeBaseVectorStore()
+  const indexName = `kb_${kbId}`
+
+  const args: (number | string)[] = [kbId]
+  let sql = 'SELECT id, filepath FROM kb_file WHERE kb_id = ?'
+  if (fileIds && fileIds.length > 0) {
+    sql += ` AND id IN (${fileIds.map(() => '?').join(', ')})`
+    args.push(...fileIds)
+  }
+
+  const rs = await db.execute({ sql, args })
+  const results: KnowledgeBaseHashCheckResult[] = []
+
+  for (const row of rs.rows) {
+    const fileId = row.id as number
+    const filePath = row.filepath as string
+    const diskHash = computeFileHash(filePath)
+
+    let storedHash: string | null = null
+    try {
+      storedHash = await vectorStore.fetchFileHash(indexName, fileId)
+    } catch (error: unknown) {
+      // Collection may not exist yet (nothing indexed so far).
+      log.debug(`[FILE] No stored hash for fileId=${fileId} in ${indexName}:`, error)
+    }
+
+    results.push({
+      fileId,
+      diskHash,
+      storedHash,
+      modified: diskHash !== null && diskHash !== storedHash,
+    })
+  }
+
+  return results
+}
+
+/**
+ * Queue modified files for re-indexing: their vectors are dropped and the
+ * files are reset to the regular processing pipeline. The worker then parses,
+ * chunks and embeds them again, storing the fresh file hash in the payloads.
+ * Returns how many files were actually queued.
+ */
+export async function queueKnowledgeBaseFilesUpdate(kbId: number, fileIds: number[]): Promise<number> {
+  if (!fileIds || fileIds.length === 0) {
+    return 0
+  }
+
+  const db = getDatabase()
+  const vectorStore = getKnowledgeBaseVectorStore()
+  const indexName = `kb_${kbId}`
+  let queued = 0
+
+  for (const fileId of fileIds) {
+    const rs = await db.execute('SELECT id FROM kb_file WHERE id = ? AND kb_id = ?', [fileId, kbId])
+    if (!rs.rows[0]) {
+      log.warn(`[FILE] Update skipped - file not found: kbId=${kbId}, fileId=${fileId}`)
+      continue
+    }
+
+    try {
+      await vectorStore.deleteVectorsByFileId(indexName, fileId)
+    } catch (error: unknown) {
+      // Nothing indexed yet for this base/file - safe to proceed.
+      log.debug(`[FILE] No vectors to delete for fileId=${fileId} in ${indexName}:`, error)
+    }
+
+    await db.execute({
+      sql: `UPDATE kb_file SET chunk_count = 0, total_chunks = 0, status = ?, error = NULL, processing_started_at = NULL WHERE id = ?`,
+      args: ['pending', fileId],
+    })
+    queued += 1
+    log.info(`[FILE] Queued file for update: kbId=${kbId}, fileId=${fileId}`)
+  }
+
+  return queued
 }

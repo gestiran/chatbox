@@ -1,11 +1,15 @@
-import { ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
 import type { FileMeta } from 'src/shared/types'
-import { KNOWLEDGE_BASE_MAX_FILE_SIZE } from '../../shared/knowledge-base'
+import {
+  KNOWLEDGE_BASE_CHUNK_SIZES,
+  KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE,
+  KNOWLEDGE_BASE_MAX_FILE_SIZE,
+} from '../../shared/knowledge-base'
 import { sentry } from '../adapters/sentry'
 import { getLogger } from '../util'
 import { getDatabase, parseSQLiteTimestamp, withTransaction } from './db'
 import { isExpectedKnowledgeBaseFileStateError } from './error-reporting'
-import { readChunks, searchKnowledgeBase } from './file-loaders'
+import { checkKnowledgeBaseFilesHashes, queueKnowledgeBaseFilesUpdate, readChunks, searchKnowledgeBase } from './file-loaders'
 import { MineruParser } from './parsers'
 import { getKnowledgeBaseVectorStore } from './vector-store'
 
@@ -50,6 +54,9 @@ export function registerKnowledgeBaseHandlers() {
         embeddingModel: row.embedding_model,
         rerankModel: row.rerank_model,
         visionModel: row.vision_model,
+        chunkSize: KNOWLEDGE_BASE_CHUNK_SIZES.includes(Number(row.chunk_size))
+          ? Number(row.chunk_size)
+          : KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE,
         providerMode: row.provider_mode || undefined,
         documentParser: row.document_parser ? JSON.parse(row.document_parser as string) : undefined,
         createdAt: row.created_at,
@@ -74,11 +81,13 @@ export function registerKnowledgeBaseHandlers() {
         embeddingModel,
         rerankModel,
         visionModel,
+        chunkSize,
       }: {
         name: string
         embeddingModel: string
         rerankModel: string
         visionModel?: string
+        chunkSize?: number
       }
     ) => {
       try {
@@ -94,17 +103,24 @@ export function registerKnowledgeBaseHandlers() {
           throw new Error('Embedding model is required')
         }
 
+        // Chunk size is fixed at creation time and cannot be changed later.
+        const effectiveChunkSize =
+          chunkSize && KNOWLEDGE_BASE_CHUNK_SIZES.includes(chunkSize)
+            ? chunkSize
+            : KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE
+
         const db = getDatabase()
         // Documents are always parsed locally and models always come from the
         // user's custom providers, so provider_mode/document_parser are no
         // longer stored for new bases (columns remain for legacy rows).
         const rs = await db.execute({
-          sql: 'INSERT INTO knowledge_base (name, embedding_model, rerank_model, vision_model) VALUES (?, ?, ?, ?)',
+          sql: 'INSERT INTO knowledge_base (name, embedding_model, rerank_model, vision_model, chunk_size) VALUES (?, ?, ?, ?, ?)',
           args: [
             name.trim(),
             embeddingModel,
             rerankModel || null,
             visionModel || null,
+            effectiveChunkSize,
           ],
         })
         const id = rs.lastInsertRowid
@@ -705,6 +721,63 @@ export function registerKnowledgeBaseHandlers() {
       })
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
+  })
+
+  // Compare on-disk file hashes against the hashes stored in the vector
+  // store payload. Files whose stored hash is missing or stale are reported
+  // as modified.
+  ipcMain.handle('kb:hash:check', async (_event, kbId: number, fileIds?: number[]) => {
+    try {
+      log.info(`ipcMain: kb:hash:check, kbId=${kbId}, fileIds=${fileIds?.join(',') ?? 'all'}`)
+      if (!kbId || kbId <= 0) {
+        throw new Error('Invalid knowledge base ID')
+      }
+      return await checkKnowledgeBaseFilesHashes(kbId, fileIds)
+    } catch (error: unknown) {
+      log.error(`ipcMain: kb:hash:check failed for kbId=${kbId}`, error)
+      sentry.withScope((scope) => {
+        scope.setTag('component', 'knowledge-base-ipc')
+        scope.setTag('operation', 'hash_check')
+        scope.setExtra('kbId', kbId)
+        sentry.captureException(error)
+      })
+      throw error
+    }
+  })
+
+  // Re-index modified files: drop their vectors and re-queue them for the
+  // regular processing pipeline (parse -> chunk -> embed -> upsert with the
+  // fresh file hash).
+  ipcMain.handle('kb:files:update', async (_event, kbId: number, fileIds: number[]) => {
+    try {
+      log.info(`ipcMain: kb:files:update, kbId=${kbId}, fileIds=${fileIds.join(',')}`)
+      if (!kbId || kbId <= 0) {
+        throw new Error('Invalid knowledge base ID')
+      }
+      if (!Array.isArray(fileIds) || fileIds.length === 0) {
+        throw new Error('No files to update')
+      }
+      return await queueKnowledgeBaseFilesUpdate(kbId, fileIds)
+    } catch (error: unknown) {
+      log.error(`ipcMain: kb:files:update failed for kbId=${kbId}`, error)
+      sentry.withScope((scope) => {
+        scope.setTag('component', 'knowledge-base-ipc')
+        scope.setTag('operation', 'files_update')
+        scope.setExtra('kbId', kbId)
+        sentry.captureException(error)
+      })
+      throw error
+    }
+  })
+
+  // Open the system file manager showing the given file (selected when the
+  // platform supports it).
+  ipcMain.handle('shell:show-item-in-folder', async (_event, filePath: string) => {
+    if (!filePath || typeof filePath !== 'string') {
+      throw new Error('File path is required')
+    }
+    log.info(`ipcMain: shell:show-item-in-folder, filePath=${filePath}`)
+    shell.showItemInFolder(filePath)
   })
 
   // Parse file with MinerU (for InputBox file attachments)

@@ -163,6 +163,12 @@ const mockController: KnowledgeBaseController = {
   resumeFile: async () => undefined,
   search: async () => [],
   update: async () => undefined,
+  checkFileHashes: async (kbId, fileIds) =>
+    knowledgeBaseFiles
+      .filter((file) => file.kb_id === kbId && (!fileIds || fileIds.includes(file.id)))
+      .map((file) => ({ fileId: file.id, diskHash: null, storedHash: null, modified: false })),
+  updateFiles: async () => undefined,
+  showItemInFolder: async () => undefined,
   getFilesMeta: async (kbId, fileIds) =>
     knowledgeBaseFiles
       .filter((file) => file.kb_id === kbId && fileIds.includes(file.id))

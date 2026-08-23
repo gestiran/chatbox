@@ -2,6 +2,7 @@ import type {
   FileMeta,
   KnowledgeBase,
   KnowledgeBaseFile,
+  KnowledgeBaseHashCheckResult,
   KnowledgeBaseSearchResult,
 } from '@shared/types'
 
@@ -12,6 +13,7 @@ export interface KnowledgeBaseController {
     embeddingModel: string
     rerankModel: string
     visionModel?: string
+    chunkSize?: number
   }): Promise<void>
   delete(id: number): Promise<void>
   listFiles(kbId: number): Promise<KnowledgeBaseFile[]>
@@ -44,4 +46,14 @@ export interface KnowledgeBaseController {
     kbId: number,
     chunks: { fileId: number; chunkIndex: number }[]
   ): Promise<{ fileId: number; filename: string; chunkIndex: number; text: string }[]>
+  /**
+   * Compare on-disk file hashes against the hashes stored in the vector store.
+   * When `fileIds` is omitted every file of the base is checked. Files whose
+   * stored hash is missing or stale are reported as `modified`.
+   */
+  checkFileHashes(kbId: number, fileIds?: number[]): Promise<KnowledgeBaseHashCheckResult[]>
+  /** Re-index the given (modified) files of a knowledge base. */
+  updateFiles(kbId: number, fileIds: number[]): Promise<void>
+  /** Open the system file manager at the file's folder (file selected). */
+  showItemInFolder(filePath: string): Promise<void>
 }

@@ -1,13 +1,16 @@
 import { Alert, Button, Flex, Group, Paper, Pill, Stack, Switch, Text, TextInput, Title } from '@mantine/core'
+import { AdaptiveSelect } from '@/components/AdaptiveSelect'
+import { KNOWLEDGE_BASE_CHUNK_SIZES, KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE } from '@shared/knowledge-base'
 import { SystemProviders } from '@shared/defaults'
 import type { KnowledgeBase, ProviderModelInfo } from '@shared/types'
 import { parseKnowledgeBaseModelString } from '@shared/utils/knowledge-base-model-parser'
-import { IconAlertTriangle, IconInfoCircle, IconPlus } from '@tabler/icons-react'
+import { IconAlertTriangle, IconInfoCircle, IconPlus, IconRefresh, IconRepeat } from '@tabler/icons-react'
 import compact from 'lodash/compact'
 import flatten from 'lodash/flatten'
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { Modal } from '@/components/layout/Overlay'
 import { AppTooltip as Tooltip } from '@/components/ui/tooltip'
 import { useProviders } from '@/hooks/useProviders'
@@ -117,6 +120,7 @@ const KnowledgeBasePage: React.FC = () => {
   const [newEmbeddingModel, setNewEmbeddingModel] = useState<string | null>(null)
   const [newRerankModel, setNewRerankModel] = useState<string | null>(null)
   const [newVisionModel, setNewVisionModel] = useState<string | null>(null)
+  const [newChunkSize, setNewChunkSize] = useState<string>(String(KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE))
   const [editKb, setEditKb] = useState<(Partial<KnowledgeBase> & { id: number }) | null>(null)
   const [editRerankModel, setEditRerankModel] = useState<string | null>(null)
   const [editVisionModel, setEditVisionModel] = useState<string | null>(null)
@@ -228,6 +232,100 @@ const KnowledgeBasePage: React.FC = () => {
     void fetchKbList()
   }, [fetchKbList])
 
+  // fileId lists of files whose stored hash is missing or stale, per kb id.
+  const [modifiedIdsByKb, setModifiedIdsByKb] = useState<Record<number, number[]>>({})
+  const [checkingKbId, setCheckingKbId] = useState<number | null>(null)
+  const [updatingKbId, setUpdatingKbId] = useState<number | null>(null)
+
+  const applyHashCheckResults = useCallback((kbId: number, results: { fileId: number; modified: boolean }[]) => {
+    setModifiedIdsByKb((prev) => ({
+      ...prev,
+      [kbId]: results.filter((r) => r.modified).map((r) => r.fileId),
+    }))
+  }, [])
+
+  // Re-check hashes of every file in the base against the vector store.
+  const handleRefreshKb = useCallback(
+    async (kb: KnowledgeBase) => {
+      if (!kb?.id || checkingKbId !== null) return
+      setCheckingKbId(kb.id)
+      try {
+        const results = await platform.getKnowledgeBaseController().checkFileHashes(kb.id)
+        applyHashCheckResults(kb.id, results)
+        const modifiedCount = results.filter((r) => r.modified).length
+        if (modifiedCount > 0) {
+          toast.info(t('{{count}} file(s) changed on disk since indexing', { count: modifiedCount }))
+        } else {
+          toast.success(t('All files are up to date'))
+        }
+      } catch (error) {
+        toastError(
+          t('Failed to check file hashes: {{error}}', { error: (error as Error)?.message || 'Unknown error' })
+        )
+      } finally {
+        setCheckingKbId(null)
+      }
+    },
+    [applyHashCheckResults, checkingKbId, t]
+  )
+
+  // Re-index every modified file of the base.
+  const handleUpdateKb = useCallback(
+    async (kb: KnowledgeBase) => {
+      if (!kb?.id || updatingKbId !== null) return
+      const fileIds = modifiedIdsByKb[kb.id] ?? []
+      if (fileIds.length === 0) return
+      setUpdatingKbId(kb.id)
+      try {
+        await platform.getKnowledgeBaseController().updateFiles(kb.id, fileIds)
+        setModifiedIdsByKb((prev) => ({ ...prev, [kb.id]: [] }))
+        toast.success(t('Updating {{count}} file(s)...', { count: fileIds.length }))
+      } catch (error) {
+        toastError(t('Failed to update files: {{error}}', { error: (error as Error)?.message || 'Unknown error' }))
+      } finally {
+        setUpdatingKbId(null)
+      }
+    },
+    [modifiedIdsByKb, t, updatingKbId]
+  )
+
+  // Re-check the hash of a single file. Returns whether it is modified.
+  const handleRefreshSingleFile = useCallback(
+    async (kbId: number, fileId: number): Promise<boolean> => {
+      try {
+        const results = await platform.getKnowledgeBaseController().checkFileHashes(kbId, [fileId])
+        const result = results[0]
+        setModifiedIdsByKb((prev) => {
+          const current = new Set(prev[kbId] ?? [])
+          if (result?.modified) {
+            current.add(fileId)
+          } else {
+            current.delete(fileId)
+          }
+          return { ...prev, [kbId]: [...current] }
+        })
+        return result?.modified ?? false
+      } catch (error) {
+        toastError(t('Failed to check file hashes: {{error}}', { error: (error as Error)?.message || 'Unknown error' }))
+        return false
+      }
+    },
+    [t]
+  )
+
+  // Re-index a single modified file.
+  const handleUpdateSingleFile = useCallback(async (kbId: number, fileId: number) => {
+    try {
+      await platform.getKnowledgeBaseController().updateFiles(kbId, [fileId])
+      setModifiedIdsByKb((prev) => ({
+        ...prev,
+        [kbId]: (prev[kbId] ?? []).filter((id) => id !== fileId),
+      }))
+    } catch (error) {
+      toastError(t('Failed to update files: {{error}}', { error: (error as Error)?.message || 'Unknown error' }))
+    }
+  }, [t])
+
   // Check platform compatibility
   useEffect(() => {
     const checkPlatform = async () => {
@@ -257,6 +355,7 @@ const KnowledgeBasePage: React.FC = () => {
         embeddingModel: embeddingModel,
         rerankModel: rerankModel,
         visionModel: visionModel,
+        chunkSize: Number(newChunkSize),
       })
 
       trackEvent('knowledge_base_created', {
@@ -348,8 +447,10 @@ const KnowledgeBasePage: React.FC = () => {
         <Stack gap="xs">
           <TextInput
             label={t('QDrant URL')}
-            description={t('URL of the QDrant database that all requests are sent to, e.g. http://localhost:6333')}
-            placeholder="http://localhost:6333"
+            description={t(
+              'URL of the QDrant database that all requests are sent to. Leave empty to use the local instance at http://127.0.0.1:6333.'
+            )}
+            placeholder="http://127.0.0.1:6333"
             value={extension.knowledgeBase.vectorStore?.qdrantUrl ?? ''}
             onChange={(e) =>
               setSettings({
@@ -410,6 +511,17 @@ const KnowledgeBasePage: React.FC = () => {
               onVisionModelChange={setNewVisionModel}
             />
 
+            {/* Chunk size is fixed at creation time and cannot be changed later */}
+            <AdaptiveSelect
+              label={t('Chunk Size')}
+              description={t('Maximum size of one text chunk. Cannot be changed after the base is created.')}
+              data={KNOWLEDGE_BASE_CHUNK_SIZES.map((size) => ({ value: String(size), label: String(size) }))}
+              value={newChunkSize}
+              onChange={(value) => value && setNewChunkSize(value)}
+              allowDeselect={false}
+              maw={320}
+            />
+
             <KnowledgeBaseFormActions
               onCancel={() => setShowCreate(false)}
               onConfirm={createKb}
@@ -436,6 +548,17 @@ const KnowledgeBasePage: React.FC = () => {
                 onRerankModelChange={setEditRerankModel}
                 onVisionModelChange={setEditVisionModel}
                 isEmbeddingDisabled
+              />
+            )}
+            {editKb && (
+              /* Chunk size is read-only after creation */
+              <AdaptiveSelect
+                label={t('Chunk Size')}
+                data={KNOWLEDGE_BASE_CHUNK_SIZES.map((size) => ({ value: String(size), label: String(size) }))}
+                value={String(editKb.chunkSize ?? KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE)}
+                disabled
+                allowDeselect={false}
+                maw={320}
               />
             )}
             <KnowledgeBaseFormActions
@@ -505,9 +628,32 @@ const KnowledgeBasePage: React.FC = () => {
                         <Text fw={600} size="lg">
                           {kb.name}
                         </Text>
-                        <Button size="xs" variant="subtle" onClick={() => handleEditKb(kb)}>
-                          {t('Edit')}
-                        </Button>
+                        <Group gap="xs">
+                          <Button
+                            size="xs"
+                            variant="subtle"
+                            leftSection={<IconRefresh size={14} />}
+                            loading={checkingKbId === kb.id}
+                            onClick={() => handleRefreshKb(kb)}
+                            title={t('Check all files for changes')}
+                          >
+                            {t('Refresh')}
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="subtle"
+                            leftSection={<IconRepeat size={14} />}
+                            disabled={(modifiedIdsByKb[kb.id] ?? []).length === 0 || updatingKbId === kb.id}
+                            loading={updatingKbId === kb.id}
+                            onClick={() => handleUpdateKb(kb)}
+                            title={t('Re-index all modified files')}
+                          >
+                            {t('Update')}
+                          </Button>
+                          <Button size="xs" variant="subtle" onClick={() => handleEditKb(kb)}>
+                            {t('Edit')}
+                          </Button>
+                        </Group>
                       </Group>
                       <Group gap="xs" wrap="wrap" align="center">
                         <Text size="xs" c="dimmed">
@@ -542,7 +688,12 @@ const KnowledgeBasePage: React.FC = () => {
                         />
                       </Group>
                     </Stack>
-                    <KnowledgeBaseDocuments knowledgeBase={kb} />
+                    <KnowledgeBaseDocuments
+                      knowledgeBase={kb}
+                      modifiedFileIds={modifiedIdsByKb[kb.id] ?? []}
+                      onRefreshFile={(fileId) => handleRefreshSingleFile(kb.id, fileId)}
+                      onUpdateFile={(fileId) => handleUpdateSingleFile(kb.id, fileId)}
+                    />
                   </Stack>
                 </Paper>
               ))

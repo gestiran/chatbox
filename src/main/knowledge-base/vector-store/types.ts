@@ -40,4 +40,10 @@ export interface KnowledgeBaseVectorStore {
 
   /** Fetch chunk contents by (fileId, chunkIndex) pairs. */
   fetchChunksByFileAndChunkIndexes(indexName: string, chunks: KbChunkKey[]): Promise<KbChunkContent[]>
+
+  /**
+   * Read the content hash (`fileHash` payload field) recorded for a file.
+   * Returns null when the file has no points or the hash is not stored.
+   */
+  fetchFileHash(indexName: string, fileId: number): Promise<string | null>
 }

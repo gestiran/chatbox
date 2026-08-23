@@ -1319,5 +1319,18 @@
   "Select additional languages for spell checking. Leave empty to use the system language.": "Выберите дополнительные языки для проверки правописания. Если оставить пустым, будет использоваться язык системы.",
   "System language": "Системный язык",
   "QDrant URL": "URL-адрес QDrant",
-  "URL of the QDrant database that all requests are sent to. Leave empty to use the local instance at http://127.0.0.1:6333.": "URL-адрес базы QDrant, к которой будут выполняться все запросы. Если оставить пустым, будет использоваться локальный сервер http://127.0.0.1:6333."
+  "URL of the QDrant database that all requests are sent to. Leave empty to use the local instance at http://127.0.0.1:6333.": "URL-адрес базы QDrant, к которой будут выполняться все запросы. Если оставить пустым, будет использоваться локальный сервер http://127.0.0.1:6333.",
+  "Chunk Size": "Размер чанка",
+  "Maximum size of one text chunk. Cannot be changed after the base is created.": "Максимальный размер одного текстового чанка. Нельзя изменить после создания базы.",
+  "Update": "Обновить",
+  "Check all files for changes": "Проверить все файлы на изменения",
+  "Re-index all modified files": "Переиндексировать все изменённые файлы",
+  "{{count}} file(s) changed on disk since indexing": "Файлов изменено на диске после индексации: {{count}}",
+  "All files are up to date": "Все файлы актуальны",
+  "Failed to check file hashes: {{error}}": "Не удалось проверить хеши файлов: {{error}}",
+  "Updating {{count}} file(s)...": "Обновление файлов ({{count}})...",
+  "Failed to update files: {{error}}": "Не удалось обновить файлы: {{error}}",
+  "Open file location": "Открыть расположение файла",
+  "Modified": "Изменён",
+  "Check for changes": "Проверить изменения"
 }

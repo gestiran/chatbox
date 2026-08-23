@@ -275,4 +275,24 @@ export class QdrantKnowledgeBaseVectorStore implements KnowledgeBaseVectorStore 
       }
     })
   }
+
+  async fetchFileHash(indexName: string, fileId: number): Promise<string | null> {
+    // POST /collections/{collection_name}/points/scroll - read the payload of
+    // a single point of this file. Every point of a file carries the same
+    // `fileHash` value, so the first hit is enough.
+    const response = await this.request<{ points?: QdrantPoint[] }>(
+      'POST',
+      `/collections/${encodeURIComponent(indexName)}/points/scroll`,
+      {
+        filter: {
+          must: [{ key: 'fileId', match: { value: fileId } }],
+        },
+        limit: 1,
+        with_payload: true,
+        with_vector: false,
+      }
+    )
+    const payload = response.result?.points?.[0]?.payload
+    return typeof payload?.fileHash === 'string' && payload.fileHash ? payload.fileHash : null
+  }
 }

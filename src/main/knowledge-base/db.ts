@@ -100,6 +100,13 @@ async function initDB(db: Client) {
       }
     })
 
+    // Chunk size (characters) selected when the base was created (read-only after creation)
+    await db.batch([`ALTER TABLE knowledge_base ADD COLUMN chunk_size INTEGER DEFAULT 1024`]).catch((error) => {
+      if (error instanceof Error && !error.message.includes('duplicate column name')) {
+        log.error('[DB] Failed to add chunk_size column', error)
+      }
+    })
+
     log.info('[DB] Database initialized')
   } catch (error) {
     log.error('[DB] Failed to initialize database:', error)

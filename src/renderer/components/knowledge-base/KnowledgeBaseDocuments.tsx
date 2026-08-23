@@ -35,6 +35,7 @@ import {
   IconPlayerPlay,
   IconPlus,
   IconRefresh,
+  IconRepeat,
   IconTrash,
   IconUpload,
 } from '@tabler/icons-react'
@@ -52,6 +53,12 @@ import ChunksPreviewModal from './ChunksPreviewModal'
 
 interface KnowledgeBaseDocumentsProps {
   knowledgeBase: KnowledgeBase | null
+  /** Files whose stored hash is missing or stale ("Modified"). */
+  modifiedFileIds?: number[]
+  /** Re-check a single file's hash. Returns whether it is still modified. */
+  onRefreshFile?: (fileId: number) => Promise<boolean>
+  /** Re-index a single modified file. */
+  onUpdateFile?: (fileId: number) => void | Promise<void>
 }
 
 interface RejectedFile {
@@ -59,7 +66,12 @@ interface RejectedFile {
   size: number
 }
 
-const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowledgeBase }) => {
+const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
+  knowledgeBase,
+  modifiedFileIds = [],
+  onRefreshFile,
+  onUpdateFile,
+}) => {
   const { t } = useTranslation()
   const [isExpanded, setIsExpanded] = useState(false)
   const [showScrollIndicator, setShowScrollIndicator] = useState(true)
@@ -495,6 +507,45 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
     [knowledgeBase?.id, refetch, refetchCount, invalidateFiles]
   )
 
+  // Open the system file manager showing the document file (selected when the
+  // platform supports it).
+  const handleRevealFile = useCallback(async (filePath: string) => {
+    try {
+      await platform.getKnowledgeBaseController().showItemInFolder(filePath)
+    } catch (error) {
+      console.error('Failed to open file location:', error)
+    }
+  }, [])
+
+  const [recheckingFileIds, setRecheckingFileIds] = useState<number[]>([])
+  const [updatingFileIds, setUpdatingFileIds] = useState<number[]>([])
+
+  const handleRefreshSingle = useCallback(
+    async (fileId: number) => {
+      if (!knowledgeBase?.id || !onRefreshFile) return
+      setRecheckingFileIds((prev) => [...prev, fileId])
+      try {
+        await onRefreshFile(fileId)
+      } finally {
+        setRecheckingFileIds((prev) => prev.filter((id) => id !== fileId))
+      }
+    },
+    [knowledgeBase?.id, onRefreshFile]
+  )
+
+  const handleUpdateSingle = useCallback(
+    async (fileId: number) => {
+      if (!knowledgeBase?.id || !onUpdateFile) return
+      setUpdatingFileIds((prev) => [...prev, fileId])
+      try {
+        await onUpdateFile(fileId)
+      } finally {
+        setUpdatingFileIds((prev) => prev.filter((id) => id !== fileId))
+      }
+    },
+    [knowledgeBase?.id, onUpdateFile]
+  )
+
   // Format date
   const formatDate = (timestamp: number): string => {
     try {
@@ -817,7 +868,9 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
                   onBottomReached={handleScrollToBottom}
                 >
                   <Stack gap={0}>
-                    {allFiles.map((doc, index) => (
+                    {allFiles.map((doc, index) => {
+                      const isModified = modifiedFileIds.includes(doc.id)
+                      return (
                       <Box key={doc.id}>
                         <Group
                           px="md"
@@ -832,9 +885,28 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
                           <Group gap="sm" align="center" style={{ flex: 1 }}>
                             <IconFile size={20} color="var(--chatbox-tint-brand)" />
                             <Box style={{ flex: 1 }}>
-                              <Text size="sm" fw={500} lineClamp={1}>
-                                {doc.filename}
-                              </Text>
+                              <Group gap="xs" wrap="nowrap" align="baseline">
+                                <Text size="sm" fw={500} style={{ flexShrink: 0 }}>
+                                  {doc.filename}
+                                </Text>
+                                {/* Full path: click opens the file manager at the file's folder */}
+                                <Tooltip label={t('Open file location')}>
+                                  <Text
+                                    size="xs"
+                                    c="dimmed"
+                                    truncate
+                                    maw="50vw"
+                                    className="cursor-pointer"
+                                    style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      void handleRevealFile(doc.filepath)
+                                    }}
+                                  >
+                                    {doc.filepath}
+                                  </Text>
+                                </Tooltip>
+                              </Group>
                               <Group gap="md" mt={2}>
                                 <Text size="xs" c="dimmed">
                                   {formatDate(doc.createdAt)}
@@ -842,6 +914,11 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
                                 <Text size="xs" c="dimmed">
                                   {formatFileSize(doc.file_size)}
                                 </Text>
+                                {isModified && (
+                                  <Pill size="xs" c="orange" className="cursor-help">
+                                    {t('Modified')}
+                                  </Pill>
+                                )}
                                 {doc.status === 'done' && (
                                   <>
                                     <Text
@@ -936,6 +1013,32 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
                                 <IconPlayerPlay size={14} />
                               </ActionIcon>
                             )}
+                            {isModified && doc.status === 'done' && (
+                              <>
+                                <ActionIcon
+                                  variant="subtle"
+                                  color="green"
+                                  size="sm"
+                                  disabled={!onUpdateFile}
+                                  loading={updatingFileIds.includes(doc.id)}
+                                  onClick={() => handleUpdateSingle(doc.id)}
+                                  title={t('Update')}
+                                >
+                                  <IconRepeat size={14} />
+                                </ActionIcon>
+                                <ActionIcon
+                                  variant="subtle"
+                                  color="blue"
+                                  size="sm"
+                                  disabled={!onRefreshFile}
+                                  loading={recheckingFileIds.includes(doc.id)}
+                                  onClick={() => handleRefreshSingle(doc.id)}
+                                  title={t('Check for changes')}
+                                >
+                                  <IconRefresh size={14} />
+                                </ActionIcon>
+                              </>
+                            )}
                             <ActionIcon
                               variant="subtle"
                               color="red"
@@ -949,7 +1052,8 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
                           </Group>
                         </Group>
                       </Box>
-                    ))}
+                      )
+                    })}
 
                     {/* Loading indicator for next page */}
                     {isFetchingNextPage && (
