@@ -59,6 +59,7 @@ import { useKnowledgeBase } from '@/hooks/useKnowledgeBase'
 import { useProviders } from '@/hooks/useProviders'
 import { useSaveBlob } from '@/hooks/useSaveBlob'
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
+import { formatElapsedTime, useThinkingTimer } from '@/hooks/useThinkingTimer'
 import { cn } from '@/lib/utils'
 import {
   getContextMessageIds,
@@ -401,6 +402,30 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
 
     const { session: currentSession } = useSession(sessionId || null)
     const { sessionSettings: currentSessionMergedSettings } = useSessionSettings(sessionId || null)
+
+    // The elapsed-time label above the Stop button is anchored to the timestamp of
+    // the last user message stored in the session (not to component-local state),
+    // so switching between open chats keeps counting the same generation run
+    // instead of restarting the timer on every remount.
+    const lastUserMessageTimestamp = useMemo(() => {
+      const messages = currentSession?.messages ?? []
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const message = messages[i]
+        if (message.role === 'user' && typeof message.timestamp === 'number') {
+          return message.timestamp
+        }
+      }
+      return null
+    }, [currentSession?.messages])
+
+    // Fallback only for the rare case when generation is running but the session
+    // (or any user message) is not available in the cache yet.
+    const [fallbackGeneratingStart, setFallbackGeneratingStart] = useState<number | null>(null)
+    useEffect(() => {
+      setFallbackGeneratingStart((prev) => (generating ? (prev ?? Date.now()) : null))
+    }, [generating])
+    const generatingStartedAt = lastUserMessageTimestamp ?? fallbackGeneratingStart
+
     const pendingApprovalToolCallId = useMemo(
       () => listPendingApprovalToolCalls(currentSession?.messages ?? [])[0]?.toolCallId,
       [currentSession?.messages]
@@ -1486,31 +1511,37 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
               />
 
               {/* Send Button */}
-              <Tooltip
-                // `n` rather than `count`, so i18next does not engage plural resolution for a
-                // label that is only ever shown for more than one reply.
-                label={generatingCount > 1 ? t('Stop all {{n}} replies', { n: generatingCount }) : t('Stop')}
-                disabled={!generating}
-                withArrow
-              >
-                <ActionIcon
-                  data-testid={generating ? TestId.chat.stop : TestId.chat.send}
-                  disabled={submitBlocked && !generating}
-                  size={32}
-                  variant="filled"
-                  color={generating ? 'dark' : 'chatbox-brand'}
-                  radius="lg"
-                  onClick={generating ? onStopGenerating : () => handleSubmit()}
-                  className={cn('shrink-0 mb-1', !generating && submitBlocked && 'disabled:!opacity-100 !text-white')}
-                  style={!generating && submitBlocked ? { backgroundColor: 'rgba(222, 226, 230, 1)' } : undefined}
+              <Flex direction="column" align="center" gap={1} className="mb-1 shrink-0">
+                {generating && generatingStartedAt !== null && <GeneratingTimer startedAt={generatingStartedAt} />}
+                <Tooltip
+                  // `n` rather than `count`, so i18next does not engage plural resolution for a
+                  // label that is only ever shown for more than one reply.
+                  label={generatingCount > 1 ? t('Stop all {{n}} replies', { n: generatingCount }) : t('Stop')}
+                  disabled={!generating}
+                  withArrow
                 >
-                  {generating ? (
-                    <ScalableIcon icon={IconPlayerStopFilled} size={16} />
-                  ) : (
-                    <ScalableIcon icon={IconArrowUp} size={16} />
-                  )}
-                </ActionIcon>
-              </Tooltip>
+                  <ActionIcon
+                    data-testid={generating ? TestId.chat.stop : TestId.chat.send}
+                    disabled={submitBlocked && !generating}
+                    size={32}
+                    variant="filled"
+                    // Accent (Stop while generating, Send when ready); gray only when sending is blocked.
+                    color="chatbox-brand"
+                    radius="lg"
+                    onClick={generating ? onStopGenerating : () => handleSubmit()}
+                    className={cn(!generating && submitBlocked && 'disabled:!opacity-100 !text-white')}
+                    style={
+                      !generating && submitBlocked ? { backgroundColor: 'var(--chatbox-tint-gray)' } : undefined
+                    }
+                  >
+                    {generating ? (
+                      <ScalableIcon icon={IconPlayerStopFilled} size={16} />
+                    ) : (
+                      <ScalableIcon icon={IconArrowUp} size={16} />
+                    )}
+                  </ActionIcon>
+                </Tooltip>
+              </Flex>
             </Flex>
 
             {(!!pictureKeys.length || !!attachments.length) && (
@@ -1972,6 +2003,21 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     )
   }
 )
+
+// Live elapsed-time label rendered above the Stop button while a reply is running.
+const GeneratingTimer = memo(function GeneratingTimer({ startedAt }: { startedAt: number }) {
+  const elapsedMs = useThinkingTimer(startedAt, true)
+  return (
+    <Text
+      size="xs"
+      // 12px * 1.25 = 15px, darker tint, lifted 8px above the Stop button.
+      className="-translate-y-2 select-none leading-none tabular-nums text-[var(--chatbox-tint-primary)]"
+      style={{ fontSize: '0.9375rem' }}
+    >
+      {formatElapsedTime(elapsedMs)}
+    </Text>
+  )
+})
 
 // Reusable attachment menu component with lightweight style
 const AttachmentMenu: React.FC<{
