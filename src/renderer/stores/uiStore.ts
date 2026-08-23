@@ -242,6 +242,10 @@ export const uiStore = createStore(
         sidebarWidth: state.sidebarWidth,
         agentModeSmartSwitchingDefault: state.agentModeSmartSwitchingDefault,
         sessionWebBrowsingMap: state.sessionWebBrowsingMap,
+        // Per-chat Knowledge Base selection must survive app restarts
+        // (same lifetime as sessionWebBrowsingMap; entries are removed when
+        // the chat is deleted — see chatStore.cleanupDeletedSessionRuntimeState).
+        sessionKnowledgeBaseMap: state.sessionKnowledgeBaseMap,
       }),
       storage: safeStorage,
     }
