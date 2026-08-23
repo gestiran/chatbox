@@ -6,8 +6,8 @@ import { getLogger } from '../util'
 import { getDatabase, parseSQLiteTimestamp, withTransaction } from './db'
 import { isExpectedKnowledgeBaseFileStateError } from './error-reporting'
 import { readChunks, searchKnowledgeBase } from './file-loaders'
-import { MineruParser, testMineruConnection } from './parsers'
-import { getKnowledgeBaseVectorStore, getKnowledgeBaseVectorStoreProvider } from './vector-store'
+import { MineruParser } from './parsers'
+import { getKnowledgeBaseVectorStore } from './vector-store'
 
 const log = getLogger('knowledge-base:ipc-handlers')
 
@@ -43,13 +43,7 @@ export function registerKnowledgeBaseHandlers() {
     try {
       log.debug('ipcMain: kb:list')
       const db = getDatabase()
-      // Only list bases that belong to the currently active vector store
-      // provider (legacy rows without the column belong to 'default').
-      const activeProvider = getKnowledgeBaseVectorStoreProvider()
-      const rs = await db.execute('SELECT * FROM knowledge_base WHERE COALESCE(vector_store_provider, ?) = ?', [
-        'default',
-        activeProvider,
-      ])
+      const rs = await db.execute('SELECT * FROM knowledge_base')
       return rs.rows.map((row) => ({
         id: row.id,
         name: row.name,
@@ -57,7 +51,6 @@ export function registerKnowledgeBaseHandlers() {
         rerankModel: row.rerank_model,
         visionModel: row.vision_model,
         providerMode: row.provider_mode || undefined,
-        vectorStoreProvider: ((row.vector_store_provider as string) || 'default') as 'default' | 'qdrant',
         documentParser: row.document_parser ? JSON.parse(row.document_parser as string) : undefined,
         createdAt: row.created_at,
       }))
@@ -81,20 +74,16 @@ export function registerKnowledgeBaseHandlers() {
         embeddingModel,
         rerankModel,
         visionModel,
-        documentParser,
-        providerMode,
       }: {
         name: string
         embeddingModel: string
         rerankModel: string
         visionModel?: string
-        documentParser?: { type: string; mineru?: { apiToken: string } }
-        providerMode?: 'chatbox-ai' | 'custom'
       }
     ) => {
       try {
         log.info(
-          `ipcMain: kb:create, name=${name}, embeddingModel=${embeddingModel}, rerankModel=${rerankModel}, visionModel=${visionModel}, documentParser=${documentParser?.type || 'default'}, providerMode=${providerMode || 'not specified'}`
+          `ipcMain: kb:create, name=${name}, embeddingModel=${embeddingModel}, rerankModel=${rerankModel}, visionModel=${visionModel}`
         )
 
         // Validate required fields
@@ -106,20 +95,16 @@ export function registerKnowledgeBaseHandlers() {
         }
 
         const db = getDatabase()
-        const documentParserJson = documentParser ? JSON.stringify(documentParser) : null
-        // Bind the base to the vector store provider that is active at
-        // creation time: its vectors will live in that provider's storage.
-        const vectorStoreProvider = getKnowledgeBaseVectorStoreProvider()
+        // Documents are always parsed locally and models always come from the
+        // user's custom providers, so provider_mode/document_parser are no
+        // longer stored for new bases (columns remain for legacy rows).
         const rs = await db.execute({
-          sql: 'INSERT INTO knowledge_base (name, embedding_model, rerank_model, vision_model, document_parser, provider_mode, vector_store_provider) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          sql: 'INSERT INTO knowledge_base (name, embedding_model, rerank_model, vision_model) VALUES (?, ?, ?, ?)',
           args: [
             name.trim(),
             embeddingModel,
             rerankModel || null,
             visionModel || null,
-            documentParserJson,
-            providerMode || null,
-            vectorStoreProvider,
           ],
         })
         const id = rs.lastInsertRowid
@@ -139,7 +124,6 @@ export function registerKnowledgeBaseHandlers() {
           scope.setExtra('embeddingModel', embeddingModel)
           scope.setExtra('rerankModel', rerankModel)
           scope.setExtra('visionModel', visionModel)
-          scope.setExtra('documentParser', documentParser?.type)
           sentry.captureException(error)
         })
         throw error
@@ -530,9 +514,9 @@ export function registerKnowledgeBaseHandlers() {
   })
 
   // Retry failed files
-  ipcMain.handle('kb:file:retry', async (_event, fileId: number, useRemoteParsing = false) => {
+  ipcMain.handle('kb:file:retry', async (_event, fileId: number) => {
     try {
-      log.debug(`ipcMain: kb:file:retry, fileId=${fileId}, useRemoteParsing=${useRemoteParsing}`)
+      log.debug(`ipcMain: kb:file:retry, fileId=${fileId}`)
 
       if (!fileId || fileId <= 0) {
         throw new Error('Invalid file ID')
@@ -552,22 +536,19 @@ export function registerKnowledgeBaseHandlers() {
         throw new Error('Only failed files can be retried')
       }
 
-      // Reset file status to pending for reprocessing, also set use_remote_parsing flag
+      // Reset file status to pending for reprocessing with the local parser.
       await db.execute({
-        sql: 'UPDATE kb_file SET status = ?, error = NULL, chunk_count = 0, total_chunks = 0, processing_started_at = NULL, use_remote_parsing = ? WHERE id = ?',
-        args: ['pending', useRemoteParsing ? 1 : 0, fileId],
+        sql: 'UPDATE kb_file SET status = ?, error = NULL, chunk_count = 0, total_chunks = 0, processing_started_at = NULL WHERE id = ?',
+        args: ['pending', fileId],
       })
 
-      log.info(
-        `[IPC] File retry request created: ${file.filename} (id=${fileId}, useRemoteParsing=${useRemoteParsing})`
-      )
+      log.info(`[IPC] File retry request created: ${file.filename} (id=${fileId})`)
       return { success: true }
     } catch (error: unknown) {
       reportKnowledgeBaseFileActionError(error, {
         logMessage: `ipcMain: kb:file:retry failed for fileId=${fileId}`,
         operation: 'file_retry',
         fileId,
-        extras: { useRemoteParsing },
       })
       throw error
     }
@@ -722,22 +703,6 @@ export function registerKnowledgeBaseHandlers() {
         operation: 'file_delete',
         fileId,
       })
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  })
-
-  // Parser-related handlers
-  ipcMain.handle('parser:test-mineru', async (_event, apiToken: string) => {
-    try {
-      log.debug('ipcMain: parser:test-mineru')
-
-      if (!apiToken || !apiToken.trim()) {
-        return { success: false, error: 'API token is required' }
-      }
-
-      return await testMineruConnection(apiToken.trim())
-    } catch (error: unknown) {
-      log.error('ipcMain: parser:test-mineru failed', error)
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   })

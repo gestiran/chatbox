@@ -2,10 +2,8 @@ import type {
   FileMeta,
   KnowledgeBase,
   KnowledgeBaseFile,
-  KnowledgeBaseProviderMode,
   KnowledgeBaseSearchResult,
 } from '@shared/types'
-import type { DocumentParserConfig } from '@shared/types/settings'
 
 export interface KnowledgeBaseController {
   list(): Promise<KnowledgeBase[]>
@@ -14,8 +12,6 @@ export interface KnowledgeBaseController {
     embeddingModel: string
     rerankModel: string
     visionModel?: string
-    documentParser?: DocumentParserConfig
-    providerMode?: KnowledgeBaseProviderMode
   }): Promise<void>
   delete(id: number): Promise<void>
   listFiles(kbId: number): Promise<KnowledgeBaseFile[]>
@@ -23,7 +19,7 @@ export interface KnowledgeBaseController {
   listFilesPaginated(kbId: number, offset?: number, limit?: number): Promise<KnowledgeBaseFile[]>
   uploadFile(kbId: number, file: FileMeta): Promise<void>
   deleteFile(fileId: number): Promise<void>
-  retryFile(fileId: number, useRemoteParsing?: boolean): Promise<void>
+  retryFile(fileId: number): Promise<void>
   pauseFile(fileId: number): Promise<void>
   resumeFile(fileId: number): Promise<void>
   search(kbId: number, query: string): Promise<KnowledgeBaseSearchResult[]>
@@ -48,5 +44,4 @@ export interface KnowledgeBaseController {
     kbId: number,
     chunks: { fileId: number; chunkIndex: number }[]
   ): Promise<{ fileId: number; filename: string; chunkIndex: number; text: string }[]>
-  testMineruConnection(apiToken: string): Promise<{ success: boolean; error?: string }>
 }

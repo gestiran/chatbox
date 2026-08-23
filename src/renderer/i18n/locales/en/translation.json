@@ -1318,8 +1318,6 @@
   "Spell Check Languages": "Spell Check Languages",
   "Select additional languages for spell checking. Leave empty to use the system language.": "Select additional languages for spell checking. Leave empty to use the system language.",
   "System language": "System language",
-  "Vector Store Provider": "Vector Store Provider",
-  "Provider used to compare and search documents. Each provider keeps its own documents: data added to one provider is not available in the other.": "Provider used to compare and search documents. Each provider keeps its own documents: data added to one provider is not available in the other.",
   "QDrant URL": "QDrant URL",
-  "URL of the QDrant database that all requests are sent to, e.g. http://localhost:6333": "URL of the QDrant database that all requests are sent to, e.g. http://localhost:6333"
+  "URL of the QDrant database that all requests are sent to. Leave empty to use the local instance at http://127.0.0.1:6333.": "URL of the QDrant database that all requests are sent to. Leave empty to use the local instance at http://127.0.0.1:6333."
 }

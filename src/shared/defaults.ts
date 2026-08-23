@@ -161,7 +161,6 @@ export function settings(): Settings {
           rerank: undefined,
         },
         vectorStore: {
-          provider: 'default',
           qdrantUrl: '',
         },
       },

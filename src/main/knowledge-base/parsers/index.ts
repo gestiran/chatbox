@@ -1,13 +1,14 @@
 import { isTextFilePath } from '../../../shared/file-extensions'
 import type { DocumentParserConfig, DocumentParserType } from '../../../shared/types/settings'
 import { getLogger } from '../../util'
-import { ChatboxParser } from './chatbox-parser'
 import { LocalParser } from './local-parser'
 import { MineruParser } from './mineru-parser'
 import type { DocumentParser, ParserFileMeta, ParserResult } from './types'
 
 const log = getLogger('knowledge-base:parser-router')
 
+// MinerU remains available for parsing chat file attachments (InputBox),
+// but is no longer used as a knowledge base document parser.
 export { MineruParser, testMineruConnection } from './mineru-parser'
 export * from './types'
 
@@ -20,15 +21,10 @@ export function createParser(config: DocumentParserConfig, kbId?: number): Docum
   switch (config.type) {
     case 'local':
       return new LocalParser(kbId)
-    case 'chatbox-ai':
-      return new ChatboxParser()
-    case 'mineru':
-      if (!config.mineru?.apiToken) {
-        throw new Error('MinerU API token is required')
-      }
-      return new MineruParser(config.mineru.apiToken)
     default:
-      log.warn(`Unknown parser type: ${config.type}, falling back to local parser`)
+      // Legacy bases may still carry 'chatbox-ai'/'mineru' in their stored
+      // config - they are parsed locally from now on.
+      log.warn(`Unsupported parser type: ${config.type}, falling back to local parser`)
       return new LocalParser(kbId)
   }
 }
@@ -78,7 +74,9 @@ export async function parseFileWithRouter(
   log.debug(`[ROUTER] Using ${config.type} parser for: ${meta.filename}`)
   const parser = createParser(config, kbId)
   const content = await parser.parse(filePath, meta)
-  return { content, parserUsed: config.type }
+  // Report the parser actually used: unsupported/legacy config types fall back
+  // to the local parser inside createParser.
+  return { content, parserUsed: parser.type }
 }
 
 /**
@@ -88,10 +86,6 @@ export function getParserDisplayName(type: DocumentParserType): string {
   switch (type) {
     case 'local':
       return 'Local'
-    case 'chatbox-ai':
-      return 'Chatbox AI'
-    case 'mineru':
-      return 'MinerU'
     default:
       return type
   }

@@ -12,16 +12,11 @@ import ChunksPreviewModal from '../knowledge-base/ChunksPreviewModal'
 import KnowledgeBasePage from '../knowledge-base/KnowledgeBase'
 import KnowledgeBaseDocuments from '../knowledge-base/KnowledgeBaseDocuments'
 import {
-  DocumentParserDisplay,
-  DocumentParserSelector,
-  KnowledgeBaseChatboxAIInfo,
   KnowledgeBaseFormActions,
   KnowledgeBaseModelSelectors,
   KnowledgeBaseNameInput,
-  KnowledgeBaseProviderModeSelect,
 } from '../knowledge-base/KnowledgeBaseForm'
 import KnowledgeBaseMenu from '../knowledge-base/KnowledgeBaseMenu'
-import { RemoteRetryModal } from '../knowledge-base/RemoteRetryModal'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -192,8 +187,6 @@ const mockController: KnowledgeBaseController = {
         'Support teams need reliable citations from uploaded documents before rollout.',
       ].join('\n'),
     })),
-  testMineruConnection: async (apiToken) =>
-    apiToken.trim() ? { success: true } : { success: false, error: 'Missing token' },
 }
 
 export const KnowledgeBasePageStates: StoryObj = {
@@ -255,18 +248,15 @@ export const KnowledgeBaseMenuStates: StoryObj = {
 }
 
 export const KnowledgeBaseModalStates: StoryObj = {
-  name: 'Knowledge base chunks preview and remote retry modal states',
+  name: 'Knowledge base chunks preview modal state',
   parameters: {
-    uiInventoryTargets: [
-      'src/renderer/components/knowledge-base/ChunksPreviewModal',
-      'src/renderer/components/knowledge-base/RemoteRetryModal',
-    ],
+    uiInventoryTargets: ['src/renderer/components/knowledge-base/ChunksPreviewModal'],
   },
   render: () => (
     <Stack gap="lg">
       <SurfaceLabel
-        title="ChunksPreviewModal and RemoteRetryModal"
-        description="Actual knowledge base modals for inspecting parsed chunks and retrying local parser failures with server parsing."
+        title="ChunksPreviewModal"
+        description="Actual knowledge base modal for inspecting parsed chunks of an uploaded document."
       />
       <Paper withBorder radius="md" p="md" h={320}>
         <Text size="sm" c="dimmed">
@@ -278,21 +268,13 @@ export const KnowledgeBaseModalStates: StoryObj = {
           file={knowledgeBaseFiles[0]}
           knowledgeBaseId={knowledgeBases[0].id}
         />
-        <RemoteRetryModal
-          opened
-          onClose={() => undefined}
-          failedFiles={knowledgeBaseFiles.filter((file) => file.status === 'failed')}
-          onSuccess={() => undefined}
-        />
       </Paper>
     </Stack>
   ),
 }
 
 function KnowledgeBaseFormFixture() {
-  const [providerMode, setProviderMode] = useState<'chatbox-ai' | 'custom'>('custom')
   const [name, setName] = useState('Product launch knowledge base')
-  const [parserConfig, setParserConfig] = useState({ type: 'mineru' as const, mineru: { apiToken: 'mineru-token' } })
   const [embeddingModel, setEmbeddingModel] = useState(`${ModelProviderEnum.OpenAI}:text-embedding-3-large`)
   const [rerankModel, setRerankModel] = useState('cohere:rerank-v3.5')
   const [visionModel, setVisionModel] = useState(`${ModelProviderEnum.OpenAI}:gpt-4.1`)
@@ -307,14 +289,11 @@ function KnowledgeBaseFormFixture() {
     <Stack gap="lg">
       <SurfaceLabel
         title="KnowledgeBaseForm"
-        description="Actual form controls used for create/edit knowledge base flows, including provider mode, parser selection, model selectors, read-only parser display, Chatbox AI info, and destructive edit actions."
+        description="Actual form controls used for create/edit knowledge base flows, including model selectors and destructive edit actions."
       />
       <Paper withBorder radius="md" p="md" maw={640}>
         <Stack gap="md">
           <KnowledgeBaseNameInput value={name} onChange={setName} label="Name" />
-          <KnowledgeBaseProviderModeSelect value={providerMode} onChange={setProviderMode} />
-          <KnowledgeBaseChatboxAIInfo showModelsLabel />
-          <DocumentParserSelector parserConfig={parserConfig} onParserConfigChange={setParserConfig} />
           <KnowledgeBaseModelSelectors
             embeddingModelList={embeddingModels}
             rerankModelList={rerankModels}
@@ -326,7 +305,6 @@ function KnowledgeBaseFormFixture() {
             onRerankModelChange={setRerankModel}
             onVisionModelChange={setVisionModel}
           />
-          <DocumentParserDisplay parserType="chatbox-ai" />
           <KnowledgeBaseFormActions
             onCancel={() => undefined}
             onConfirm={() => undefined}

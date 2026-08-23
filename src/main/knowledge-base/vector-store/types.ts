@@ -1,7 +1,3 @@
-import type { KnowledgeBaseVectorStoreProvider } from '../../../shared/types/settings'
-
-export type { KnowledgeBaseVectorStoreProvider }
-
 export interface KbVectorSearchResult {
   id: string
   score: number
@@ -21,14 +17,11 @@ export interface KbChunkContent {
 }
 
 /**
- * Provider-agnostic vector store used by the knowledge base for storing,
- * comparing and searching document embeddings.
- *
- * Each provider keeps its own data: documents ingested through one provider
- * are never visible to the other one.
+ * Vector store used by the knowledge base for storing, comparing and
+ * searching document embeddings (QDrant via its REST API).
  */
 export interface KnowledgeBaseVectorStore {
-  readonly provider: KnowledgeBaseVectorStoreProvider
+  readonly provider: 'qdrant'
 
   /** Create the backing index/collection if it does not exist yet. */
   createIndex(indexName: string, dimension: number): Promise<void>

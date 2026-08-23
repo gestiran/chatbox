@@ -100,17 +100,6 @@ async function initDB(db: Client) {
       }
     })
 
-    // Add vector_store_provider column to knowledge_base table to record which
-    // vector store provider ('default' | 'qdrant') the base belongs to. Bases
-    // are isolated per provider and only listed while that provider is active.
-    await db.batch([`ALTER TABLE knowledge_base ADD COLUMN vector_store_provider TEXT DEFAULT NULL`]).catch(
-      (error) => {
-        if (error instanceof Error && !error.message.includes('duplicate column name')) {
-          log.error('[DB] Failed to add vector_store_provider column', error)
-        }
-      }
-    )
-
     log.info('[DB] Database initialized')
   } catch (error) {
     log.error('[DB] Failed to initialize database:', error)

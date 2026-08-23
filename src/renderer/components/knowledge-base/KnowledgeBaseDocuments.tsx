@@ -42,17 +42,13 @@ import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { trackJkClickEvent } from '@/analytics/jk'
-import { JK_EVENTS, JK_PAGE_NAMES } from '@/analytics/jk-events'
 import { AppTooltip as Tooltip } from '@/components/ui/tooltip'
 import { useKnowledgeBaseFiles, useKnowledgeBaseFilesActions, useKnowledgeBaseFilesCount } from '@/hooks/knowledge-base'
 import { useChunksPreview } from '@/hooks/useChunksPreview'
 import { toastError } from '@/packages/toast'
 import platform from '@/platform'
-import { useSettingsStore } from '@/stores/settingsStore'
 import { trackEvent } from '@/utils/track'
 import ChunksPreviewModal from './ChunksPreviewModal'
-import { RemoteRetryModal } from './RemoteRetryModal'
 
 interface KnowledgeBaseDocumentsProps {
   knowledgeBase: KnowledgeBase | null
@@ -69,11 +65,9 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
   const [showScrollIndicator, setShowScrollIndicator] = useState(true)
   const [isDragOver, setIsDragOver] = useState(false)
   const [showUploadArea, setShowUploadArea] = useState(false)
-  const [showRemoteRetryModal, setShowRemoteRetryModal] = useState(false)
   const [sizeRejectedFiles, setSizeRejectedFiles] = useState<RejectedFile[]>([])
 
   const scrollAreaRef = useRef<HTMLDivElement>(null)
-  const globalDocumentParserType = useSettingsStore((state) => state.extension?.documentParser?.type)
 
   // Chunks preview hook
   const chunksPreview = useChunksPreview()
@@ -114,24 +108,6 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
 
     return () => clearInterval(pollInterval)
   }, [knowledgeBase?.id, allFiles, refetch, refetchCount])
-
-  // Failed files for remote retry feature
-  const failedFiles = useMemo(() => allFiles.filter((file) => file.status === 'failed'), [allFiles])
-
-  // Parser types that should NOT show the "use Chatbox AI" suggestion when they fail
-  const PARSER_NO_SUGGESTION_LIST: string[] = ['mineru', 'chatbox-ai']
-
-  // Check if we should show the Chatbox AI suggestion for failed files
-  // Show suggestion only if there are failed files that are NOT in the exception list
-  const shouldShowChatboxAISuggestion = useMemo(() => {
-    if (failedFiles.length === 0) return false
-    // Check if any failed file used a parser that should show the suggestion
-    return failedFiles.some(
-      (file) =>
-        file.error !== KNOWLEDGE_BASE_PARSED_CONTENT_TOO_LARGE_ERROR &&
-        !PARSER_NO_SUGGESTION_LIST.includes(file.parser_type || 'local')
-    )
-  }, [failedFiles])
 
   // MIME type correction for Windows compatibility
   const correctMimeType = useCallback((file: File): FileMeta => {
@@ -202,12 +178,10 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
 
   // Get supported file types
   const getSupportedFileTypes = useCallback(() => {
-    const effectiveParserType = knowledgeBase?.documentParser?.type || globalDocumentParserType || 'local'
-    const isLocalParser = effectiveParserType === 'local'
-
     const baseDocumentTypes = ['.pdf', '.docx', '.txt', '.md', '.rtf', '.pptx', '.xlsx', '.csv', '.epub']
-    const extendedDocumentTypes = ['.doc', '.ppt', '.xls']
-    const documentTypes = isLocalParser ? baseDocumentTypes : [...baseDocumentTypes, ...extendedDocumentTypes]
+    // Documents are always parsed locally, so legacy formats that require a
+    // cloud parser (.doc/.ppt/.xls) are not accepted anymore.
+    const documentTypes = baseDocumentTypes
     const imageTypes = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']
 
     // Add MIME types for better Windows compatibility
@@ -222,14 +196,7 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
       'text/csv',
       'application/epub+zip',
     ]
-    const extendedDocumentMimeTypes = [
-      'application/msword',
-      'application/vnd.ms-powerpoint',
-      'application/vnd.ms-excel',
-    ]
-    const documentMimeTypes = isLocalParser
-      ? baseDocumentMimeTypes
-      : [...baseDocumentMimeTypes, ...extendedDocumentMimeTypes]
+    const documentMimeTypes = baseDocumentMimeTypes
     const imageMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp']
 
     const hasVisionModel = knowledgeBase?.visionModel && knowledgeBase.visionModel.trim() !== ''
@@ -243,7 +210,7 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
       accept: allTypes.join(','),
       display: hasVisionModel ? [...documentTypes, ...imageTypes] : documentTypes,
     }
-  }, [knowledgeBase?.documentParser?.type, knowledgeBase?.visionModel, globalDocumentParserType])
+  }, [knowledgeBase?.visionModel])
 
   // Handle file upload (shared logic)
   const uploadFiles = useCallback(
@@ -839,52 +806,6 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
               </Box>
             )}
 
-            {/* Failed files banner - show Chatbox AI suggestion only for local parser failures */}
-            {shouldShowChatboxAISuggestion && (
-              <Alert variant="light" color="yellow" p="sm">
-                <Flex gap="xs" align="center" justify="space-between">
-                  <Flex gap="xs" align="center" style={{ flex: 1 }}>
-                    <Text size="sm">{t('{{count}} file(s) failed to parse', { count: failedFiles.length })}</Text>
-                  </Flex>
-                  <Stack gap={4} align="flex-end" className="flex-shrink-0">
-                    <Button size="xs" variant="light" onClick={() => setShowRemoteRetryModal(true)}>
-                      {t('Use server parsing')}
-                    </Button>
-                    <Tooltip
-                      label={t(
-                        'If you have never had a license before, you can claim it after logging in on the official website.'
-                      )}
-                      withArrow
-                      multiline
-                      maw={240}
-                      position="bottom-end"
-                      styles={{
-                        tooltip: {
-                          backgroundColor: 'rgba(0, 0, 0, 0.75)',
-                          backdropFilter: 'blur(4px)',
-                        },
-                      }}
-                    >
-                      <Text
-                        size="xs"
-                        c="dimmed"
-                        className="cursor-pointer hover:text-blue-500 transition-colors"
-                        onClick={() => {
-                          trackJkClickEvent(JK_EVENTS.FREE_LICENSE_CLAIM_CLICK, {
-                            pageName: JK_PAGE_NAMES.SETTING_PAGE,
-                            content: 'kb_error',
-                          })
-                          platform.openLink('https://chatboxai.app/login')
-                        }}
-                      >
-                        {t('Free trial available')} →
-                      </Text>
-                    </Tooltip>
-                  </Stack>
-                </Flex>
-              </Alert>
-            )}
-
             {/* Scrollable Document List with Scroll Indicator */}
             {allFiles.length > 0 && (
               <Box style={{ position: 'relative' }}>
@@ -1087,16 +1008,6 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({ knowled
         knowledgeBaseId={knowledgeBase?.id}
       />
 
-      {/* Remote Retry Modal */}
-      <RemoteRetryModal
-        opened={showRemoteRetryModal}
-        onClose={() => setShowRemoteRetryModal(false)}
-        failedFiles={failedFiles}
-        onSuccess={() => {
-          refetch()
-          refetchCount()
-        }}
-      />
     </Stack>
   )
 }

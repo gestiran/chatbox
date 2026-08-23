@@ -1,6 +1,5 @@
 import type { ElectronIPC } from '@shared/electron-types'
-import type { FileMeta, KnowledgeBaseProviderMode } from '@shared/types'
-import type { DocumentParserConfig } from '@shared/types/settings'
+import type { FileMeta } from '@shared/types'
 import type { KnowledgeBaseController } from './interface'
 
 class DesktopKnowledgeBaseController implements KnowledgeBaseController {
@@ -16,8 +15,6 @@ class DesktopKnowledgeBaseController implements KnowledgeBaseController {
     embeddingModel: string
     rerankModel: string
     visionModel?: string
-    documentParser?: DocumentParserConfig
-    providerMode?: KnowledgeBaseProviderMode
   }) {
     await this.ipc.invoke('kb:create', createParams)
   }
@@ -47,8 +44,8 @@ class DesktopKnowledgeBaseController implements KnowledgeBaseController {
     return await this.ipc.invoke('kb:file:delete', fileId)
   }
 
-  async retryFile(fileId: number, useRemoteParsing = false) {
-    return await this.ipc.invoke('kb:file:retry', fileId, useRemoteParsing)
+  async retryFile(fileId: number) {
+    return await this.ipc.invoke('kb:file:retry', fileId)
   }
 
   async pauseFile(fileId: number) {
@@ -74,10 +71,6 @@ class DesktopKnowledgeBaseController implements KnowledgeBaseController {
 
   async readFileChunks(kbId: number, chunks: { fileId: number; chunkIndex: number }[]) {
     return this.ipc.invoke('kb:file:read-chunks', kbId, chunks)
-  }
-
-  async testMineruConnection(apiToken: string): Promise<{ success: boolean; error?: string }> {
-    return this.ipc.invoke('parser:test-mineru', apiToken)
   }
 }
 
