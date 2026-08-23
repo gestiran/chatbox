@@ -41,10 +41,7 @@ export function RouteComponent() {
     const systemProviders = SystemProviders().filter(
       (p) => !(isExceeded && p.name.toLocaleLowerCase().match(/openai|claude|gemini/i))
     )
-    // Put ChatboxAI first
-    const chatboxAI = systemProviders.find((p) => p.id === 'chatbox-ai')
-    const others = systemProviders.filter((p) => p.id !== 'chatbox-ai')
-    return [...(chatboxAI ? [chatboxAI] : []), ...others, ...(customProviders || [])].map((p) => ({
+    return [...systemProviders, ...(customProviders || [])].map((p) => ({
       ...p,
       ...(providersMap?.[p.id] || {}),
     }))
