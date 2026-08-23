@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import useNeedRoomForWinControls from '@/hooks/useNeedRoomForWinControls'
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
+import { useProjects } from '@/stores/projectStore'
 import { scheduleGenerateNameAndThreadName, scheduleGenerateThreadName } from '@/stores/sessionActions'
 import * as settingActions from '@/stores/settingActions'
 import { useUIStore } from '@/stores/uiStore'
@@ -26,6 +27,9 @@ export default function Header(props: { session: Session }) {
   const { needRoomForMacWindowControls } = useNeedRoomForWinControls()
 
   const { session: currentSession } = props
+  const projects = useProjects()
+  const project =
+    currentSession?.projectId && projects ? projects.find((item) => item.id === currentSession.projectId) : undefined
 
   useEffect(() => {
     const autoGenerateTitle = settingActions.getAutoGenerateTitle()
@@ -77,7 +81,12 @@ export default function Header(props: { session: Session }) {
           className="min-w-0"
           {...(isSmallScreen ? { justify: 'center', pl: 28, pr: 8 } : {})}
         >
-          <Text fw={600} fz={18} lh="24px" truncate="end" className="min-w-0">
+          {project && (
+            <Text fw={600} fz={18} lh="24px" c="chatbox-tertiary" truncate className="max-w-[40%] shrink-0">
+              {project.name} |
+            </Text>
+          )}
+          <Text fw={600} fz={18} lh="24px" truncate="end" className="min-w-0" ml={project ? 6 : undefined}>
             {currentSession?.name}
           </Text>
           <Tooltip>

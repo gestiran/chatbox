@@ -23,6 +23,8 @@ export interface Props {
   project: Project
   chatCount: number
   expanded: boolean
+  /** True while a chat of this project is open in the main window. */
+  active?: boolean
 }
 
 /**
@@ -30,7 +32,7 @@ export interface Props {
  * foldout toggle, a small "+" button that creates a new chat inside the project,
  * and a right-click menu with Edit / Remove actions.
  */
-function ProjectItem({ project, chatCount, expanded }: Props) {
+function ProjectItem({ project, chatCount, expanded, active = false }: Props) {
   const { t } = useTranslation()
   const [menuOpened, setMenuOpened] = useState(false)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -128,7 +130,8 @@ function ProjectItem({ project, chatCount, expanded }: Props) {
         py={8}
         h={36}
         className={clsx(
-          'cursor-pointer select-none rounded-lg group/project-item hover:bg-chatbox-background-gray-secondary'
+          'cursor-pointer select-none rounded-lg group/project-item',
+          active ? 'bg-chatbox-background-brand-secondary' : 'hover:bg-chatbox-background-gray-secondary'
         )}
         onClick={handleToggleFoldout}
         onContextMenu={handleContextMenu}
@@ -144,10 +147,17 @@ function ProjectItem({ project, chatCount, expanded }: Props) {
         <ScalableIcon
           icon={IconFolder}
           size={18}
-          className="shrink-0 text-[var(--chatbox-tint-secondary)]"
+          className={clsx('shrink-0', active ? 'text-chatbox-brand' : 'text-[var(--chatbox-tint-secondary)]')}
         />
 
-        <Text span flex={1} lineClamp={1} c="chatbox-primary" fw={500} data-testid={TestId.sidebar.projectTitle}>
+        <Text
+          span
+          flex={1}
+          lineClamp={1}
+          c={active ? 'chatbox-brand' : 'chatbox-primary'}
+          fw={500}
+          data-testid={TestId.sidebar.projectTitle}
+        >
           {project.name}
         </Text>
 

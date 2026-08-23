@@ -198,6 +198,14 @@ export default function SessionList(props: Props) {
   }, [activeDragId, displayItems])
 
   const routerState = useRouterState()
+  // Project whose chat is currently open (highlighted in the list).
+  const activeProjectId = useMemo(() => {
+    const match = /^\/session\/(.+)$/.exec(routerState.location.pathname)
+    if (!match || !sortedSessions) {
+      return undefined
+    }
+    return sortedSessions.find((session) => session.id === match[1])?.projectId
+  }, [routerState.location.pathname, sortedSessions])
   const onEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage()
@@ -274,7 +282,12 @@ export default function SessionList(props: Props) {
                     showDragHandle={Boolean(isSmallScreen && isReordering)}
                     dragHandleLabel={t('Adjust order') || undefined}
                   >
-                    <ProjectItem project={item.project} chatCount={item.chatCount} expanded={item.expanded} />
+                    <ProjectItem
+                      project={item.project}
+                      chatCount={item.chatCount}
+                      expanded={item.expanded}
+                      active={item.project.id === activeProjectId}
+                    />
                   </SortableItem>
                 )
               }
