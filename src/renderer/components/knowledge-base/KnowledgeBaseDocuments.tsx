@@ -105,6 +105,13 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
     return filesData?.pages.flatMap((page) => page.files) || []
   }, [filesData])
 
+  // Documents counter: when some files are "Modified" (stale hash or not
+  // indexed yet), the header pill shows "<not modified>/<total>" on an orange
+  // background; otherwise it shows just the total count as before.
+  const modifiedFilesCount = modifiedFileIds.length
+  const unmodifiedFilesCount = Math.max(filesCount - modifiedFilesCount, 0)
+  const hasModifiedFiles = modifiedFilesCount > 0
+
   // Real-time polling for file status updates
   useEffect(() => {
     if (!knowledgeBase?.id || allFiles.length === 0) return
@@ -759,14 +766,27 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
               <Pill
                 size="xs"
                 bg={
-                  filesCount > 0
-                    ? 'var(--chatbox-background-brand-secondary)'
-                    : 'var(--chatbox-background-gray-secondary)'
+                  hasModifiedFiles
+                    ? 'var(--chatbox-background-warning-primary)'
+                    : filesCount > 0
+                      ? 'var(--chatbox-background-brand-secondary)'
+                      : 'var(--chatbox-background-gray-secondary)'
                 }
-                c={filesCount > 0 ? 'var(--chatbox-tint-brand)' : 'var(--chatbox-tint-gray)'}
+                c={
+                  hasModifiedFiles
+                    ? 'var(--chatbox-tint-black)'
+                    : filesCount > 0
+                      ? 'var(--chatbox-tint-brand)'
+                      : 'var(--chatbox-tint-gray)'
+                }
                 fz="xs"
+                title={
+                  hasModifiedFiles
+                    ? t('{{count}} file(s) changed on disk since indexing', { count: modifiedFilesCount })
+                    : undefined
+                }
               >
-                {filesCount}
+                {hasModifiedFiles ? `${unmodifiedFilesCount}/${filesCount}` : filesCount}
               </Pill>
             </Group>
             <Button
@@ -904,21 +924,38 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
                                 <Text size="sm" fw={500} style={{ flexShrink: 0 }}>
                                   {doc.filename}
                                 </Text>
-                                {/* Full path: click opens the file manager at the file's folder */}
-                                <Tooltip label={t('Open file location')}>
+                                {/* Full path: click opens the file manager at the file's folder.
+                                    The START of long paths is trimmed (ellipsis on the left) so the
+                                    path never takes more than half of the window width. RTL layout
+                                    puts the ellipsis at the left; LRI/PDI marks keep mixed-script
+                                    paths in logical (readable) order. */}
+                                <Tooltip
+                                  label={`${t('Open file location')}: ${doc.filepath}`}
+                                  multiline
+                                  w={400}
+                                  withArrow
+                                  position="top"
+                                >
                                   <Text
                                     size="xs"
                                     c="dimmed"
-                                    truncate
                                     maw="50vw"
                                     className="cursor-pointer"
-                                    style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}
+                                    style={{
+                                      textDecoration: 'underline',
+                                      textUnderlineOffset: 2,
+                                      direction: 'rtl',
+                                      textAlign: 'left',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                    }}
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       void handleRevealFile(doc.filepath)
                                     }}
                                   >
-                                    {doc.filepath}
+                                    {'\u2066' + doc.filepath + '\u2069'}
                                   </Text>
                                 </Tooltip>
                               </Group>
