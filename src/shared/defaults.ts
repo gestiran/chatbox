@@ -146,6 +146,7 @@ export function settings(): Settings {
     },
     extension: {
       webSearch: {
+        enabled: true,
         provider: 'build-in',
         tavilyApiKey: '',
         bochaApiKey: '',

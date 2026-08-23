@@ -150,6 +150,9 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
   const workModeCapabilitiesDisabled = agentModeUIState.capabilitiesDisabled
 
   // Web Search state
+  // Master switch from Settings / Web Search. When off, the whole Web Search
+  // entry point is hidden here and in project settings.
+  const webSearchEnabled = useSettingsStore((s) => s.extension.webSearch.enabled !== false)
   const webSearchProvider = useSettingsStore((s) => s.extension.webSearch.provider)
   const setSettings = useSettingsStore((s) => s.setSettings)
   const licenseKey = useSettingsStore((s) => s.licenseKey)
@@ -668,6 +671,7 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
   // --- Sub-panel content ---
   const renderSubPanel = () => {
     if (page === 'web-search') {
+      if (!webSearchEnabled) return null
       return (
         <>
           <SubPanelHeader title={t('Web Search')} settingsPath="/web-search" />
@@ -1083,38 +1087,40 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
           {/* Built-in capabilities */}
           <Divider my={4} mx="sm" label={t('Built-in')} labelPosition="left" />
 
-          <ExtensionRow
-            icon={<IconWorldWww size={16} className="text-[var(--chatbox-tint-secondary)]" />}
-            label={t('Web Search')}
-            subtitle={webBrowsingMode ? webSearchProviderLabel : undefined}
-            active={page === 'web-search'}
-            page="web-search"
-            subPanelAlign="top"
-            rightContent={
-              <Flex gap="xs" align="center" className="shrink-0">
-                <Switch
-                  checked={webBrowsingMode}
-                  size="xs"
-                  onChange={(e) => {
-                    e.stopPropagation()
-                    const enabled = e.currentTarget.checked
-                    trackWebSearchClick(
-                      {
-                        sessionId,
-                        mode: agentModeUIState.isActive ? 'work_mode' : 'chat_mode',
-                        provider: providerId,
-                        model: modelId,
-                      },
-                      enabled,
-                      webSearchProvider
-                    )
-                    onWebBrowsingChange(enabled)
-                  }}
-                />
-                <IconChevronRight size={14} className="text-[var(--chatbox-tint-tertiary)]" />
-              </Flex>
-            }
-          />
+          {webSearchEnabled && (
+            <ExtensionRow
+              icon={<IconWorldWww size={16} className="text-[var(--chatbox-tint-secondary)]" />}
+              label={t('Web Search')}
+              subtitle={webBrowsingMode ? webSearchProviderLabel : undefined}
+              active={page === 'web-search'}
+              page="web-search"
+              subPanelAlign="top"
+              rightContent={
+                <Flex gap="xs" align="center" className="shrink-0">
+                  <Switch
+                    checked={webBrowsingMode}
+                    size="xs"
+                    onChange={(e) => {
+                      e.stopPropagation()
+                      const enabled = e.currentTarget.checked
+                      trackWebSearchClick(
+                        {
+                          sessionId,
+                          mode: agentModeUIState.isActive ? 'work_mode' : 'chat_mode',
+                          provider: providerId,
+                          model: modelId,
+                        },
+                        enabled,
+                        webSearchProvider
+                      )
+                      onWebBrowsingChange(enabled)
+                    }}
+                  />
+                  <IconChevronRight size={14} className="text-[var(--chatbox-tint-tertiary)]" />
+                </Flex>
+              }
+            />
+          )}
 
           <ExtensionRow
             icon={<IconCode size={16} className="text-[var(--chatbox-tint-secondary)]" />}

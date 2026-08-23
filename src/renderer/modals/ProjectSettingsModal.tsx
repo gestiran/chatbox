@@ -80,6 +80,9 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
   // Master switch for the built-in filesystem toolset (Settings / General). When it is off,
   // project-level working directories would have no effect, so the block stays hidden.
   const filesystemToolsEnabled = useSettingsStore((s) => s.enableFilesystemTools !== false)
+  // Master switch for Web Search (Settings / Web Search). When it is off, per-project
+  // web-search options would have no effect, so the block stays hidden.
+  const webSearchEnabled = useSettingsStore((s) => s.extension.webSearch.enabled !== false)
 
   // Skills list (same source as the input-box panel)
   const [skills, setSkills] = useState<Array<{ name: string; description: string }>>([])
@@ -296,30 +299,32 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
             ))}
           </Stack>
 
-          <Stack gap="xs">
-            <Text fw={700}>{t('Web Search')}</Text>
-            <Switch
-              label={t('Enable Web Search for new chats')}
-              checked={webBrowsingEnabled}
-              onChange={(e) => setWebBrowsingEnabled(e.currentTarget.checked)}
-            />
-            {WEB_SEARCH_PROVIDERS.map((option) => (
-              <UnstyledButton
-                key={option.value}
-                onClick={() => setWebSearchProvider(option.value)}
-                className="w-full rounded px-3 py-2 text-left hover:bg-[var(--chatbox-background-tertiary)]"
-              >
-                <Flex justify="space-between" align="center">
-                  <Text size="sm" c={webSearchProvider === option.value ? 'chatbox-brand' : undefined}>
-                    {option.label}
-                  </Text>
-                  {webSearchProvider === option.value && (
-                    <IconCheck size={14} color="var(--chatbox-tint-brand)" />
-                  )}
-                </Flex>
-              </UnstyledButton>
-            ))}
-          </Stack>
+          {webSearchEnabled && (
+            <Stack gap="xs">
+              <Text fw={700}>{t('Web Search')}</Text>
+              <Switch
+                label={t('Enable Web Search for new chats')}
+                checked={webBrowsingEnabled}
+                onChange={(e) => setWebBrowsingEnabled(e.currentTarget.checked)}
+              />
+              {WEB_SEARCH_PROVIDERS.map((option) => (
+                <UnstyledButton
+                  key={option.value}
+                  onClick={() => setWebSearchProvider(option.value)}
+                  className="w-full rounded px-3 py-2 text-left hover:bg-[var(--chatbox-background-tertiary)]"
+                >
+                  <Flex justify="space-between" align="center">
+                    <Text size="sm" c={webSearchProvider === option.value ? 'chatbox-brand' : undefined}>
+                      {option.label}
+                    </Text>
+                    {webSearchProvider === option.value && (
+                      <IconCheck size={14} color="var(--chatbox-tint-brand)" />
+                    )}
+                  </Flex>
+                </UnstyledButton>
+              ))}
+            </Stack>
+          )}
 
           {supportsWorkingDirectories && filesystemToolsEnabled && (
             <Stack gap="xs">

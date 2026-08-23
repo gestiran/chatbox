@@ -265,6 +265,9 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
       // Default: true for ChatboxAI, false for others
       return model?.provider === ModelProviderEnum.ChatboxAI
     }, [sessionWebBrowsingMap, currentSessionId, model?.provider])
+    // Master switch from Settings / Web Search. When off, the standalone
+    // mobile/web toggle is hidden because web search is unavailable globally.
+    const webSearchEnabled = useSettingsStore((s) => s.extension.webSearch.enabled !== false)
 
     // this is used for keyboard shortcut. if we don't provide this, kbd wont know what to set when it's a new session(it doesnt have provider info)
     useEffect(() => {
@@ -1715,7 +1718,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
 
                 {/* Desktop owns Web Search in AgentModePanel for both Chat and Work modes.
                     Mobile/Web keep this standalone entry because they do not render that panel. */}
-                {platform.type !== 'desktop' && (
+                {platform.type !== 'desktop' && webSearchEnabled && (
                   <Tooltip label={t('Web Search')} position="top" withArrow disabled={isSmallScreen}>
                     <UnstyledButton
                       data-testid={TestId.chat.webSearchToggle}

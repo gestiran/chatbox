@@ -326,6 +326,9 @@ const ShortcutSettingSchema = z.preprocess(
 
 const ExtensionSettingsSchema = z.object({
   webSearch: z.object({
+    // Master switch (Settings / Web Search). When off, all web-search UI is
+    // hidden and the toolset is never registered for chats.
+    enabled: z.boolean().default(true).catch(true),
     provider: z.enum(['build-in', 'bing', 'tavily', 'bocha', 'querit']).catch('build-in'),
     tavilyApiKey: z.string().optional(),
     bochaApiKey: z.string().optional(),

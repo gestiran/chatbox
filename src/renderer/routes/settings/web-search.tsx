@@ -1,4 +1,4 @@
-import { Button, Flex, PasswordInput, Select, Stack, Text, Title } from '@mantine/core'
+import { Button, Flex, PasswordInput, Select, Stack, Switch, Text, Title } from '@mantine/core'
 import { IconCheck, IconX } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
 import { ofetch } from 'ofetch'
@@ -99,10 +99,30 @@ export function RouteComponent() {
     <Stack p="md" gap="xxl">
       <Title order={5}>{t('Web Search')}</Title>
 
+      {/* Master switch for the whole Web Search feature. When off, provider
+          selection is disabled and every web-search UI entry point is hidden. */}
+      <Switch
+        label={t('Enable Web Search')}
+        description={t('When disabled, Web Search is hidden and unavailable in all chats.')}
+        checked={extension.webSearch.enabled !== false}
+        onChange={(e) =>
+          setSettings({
+            extension: {
+              ...extension,
+              webSearch: {
+                ...extension.webSearch,
+                enabled: e.currentTarget.checked,
+              },
+            },
+          })
+        }
+      />
+
       <AdaptiveSelect
         comboboxProps={{ withinPortal: true, withArrow: true }}
         data={WEB_SEARCH_PROVIDERS.map((p) => ({ value: p.value, label: p.label }))}
         value={extension.webSearch.provider}
+        disabled={extension.webSearch.enabled === false}
         onChange={(e) =>
           e &&
           setSettings({
