@@ -26,7 +26,7 @@ const useKnowledgeBaseFilesCount = (kbId: number | null) => {
   })
 }
 
-const useKnowledgeBaseFiles = (kbId: number | null, pageSize = 20) => {
+const useKnowledgeBaseFiles = (kbId: number | null, pageSize = 20, enabled = true) => {
   const fetchFiles = async ({ pageParam = 0 }) => {
     if (!kbId) return { files: [], nextCursor: null }
 
@@ -43,7 +43,9 @@ const useKnowledgeBaseFiles = (kbId: number | null, pageSize = 20) => {
     queryKey: ['knowledge-base-files', kbId, pageSize],
     queryFn: fetchFiles,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    enabled: !!kbId,
+    // Lazy-loading support: callers may pass enabled=false until e.g. the
+    // documents section is expanded by the user.
+    enabled: !!kbId && enabled,
     initialPageParam: 0,
   })
 }

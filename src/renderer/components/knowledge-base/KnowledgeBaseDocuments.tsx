@@ -30,6 +30,7 @@ import {
   IconCircleCheck,
   IconExclamationCircle,
   IconFile,
+  IconFolder,
   IconLoader,
   IconPlayerPause,
   IconPlayerPlay,
@@ -43,6 +44,7 @@ import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { Foldout } from '@/components/common/Foldout'
 import { AppTooltip as Tooltip } from '@/components/ui/tooltip'
 import { useKnowledgeBaseFiles, useKnowledgeBaseFilesActions, useKnowledgeBaseFilesCount } from '@/hooks/knowledge-base'
 import { useChunksPreview } from '@/hooks/useChunksPreview'
@@ -95,7 +97,12 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
     isFetchingNextPage,
     isLoading,
     refetch,
-  } = useKnowledgeBaseFiles(knowledgeBase?.id || null)
+  } = useKnowledgeBaseFiles(
+    knowledgeBase?.id || null,
+    20,
+    // Load the list lazily: only when the parent "Documents" section is expanded
+    isExpanded,
+  )
 
   const { data: filesCount = 0, refetch: refetchCount } = useKnowledgeBaseFilesCount(knowledgeBase?.id || null)
   const { invalidateFiles } = useKnowledgeBaseFilesActions()
@@ -728,6 +735,251 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
 
   const supportedTypes = getSupportedFileTypes()
 
+  /** Parent directory of an absolute POSIX/Windows path ('' when the file has no folder). */
+  const getDirectoryPath = (filepath: string): string => {
+    const trimmed = filepath.replace(/[\\/]+$/, '')
+    const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
+    return cut > 0 ? trimmed.slice(0, cut) : ''
+  }
+
+  /** Last segment of a directory path ('/' for root). */
+  const getDirectoryBasename = (dir: string): string => {
+    if (!dir) return '/'
+    const parts = dir.split(/[\\/]/).filter(Boolean)
+    return parts[parts.length - 1] ?? dir
+  }
+
+  /** Visible file path: at most 64 characters, START of long paths replaced by an ellipsis. */
+  const getDisplayPath = (filepath: string): string => {
+    const maxChars = 64
+    if (filepath.length <= maxChars) return filepath
+    return '…' + filepath.slice(filepath.length - maxChars + 1)
+  }
+
+  // Directory grouping: folders holding two or more documents collapse into a
+  // Foldout section named after the folder. Groups are rendered first
+  // (alphabetically); files whose folder holds a single document stay outside
+  // any group, at the bottom of the list.
+  const { groupedFolders, looseFiles } = useMemo(() => {
+    const byDir = new Map<string, FileMeta[]>()
+    for (const file of allFiles) {
+      const dir = getDirectoryPath(file.filepath)
+      const bucket = byDir.get(dir)
+      if (bucket) bucket.push(file)
+      else byDir.set(dir, [file])
+    }
+    const folders: Array<{ dir: string; name: string; files: FileMeta[] }> = []
+    const loose: FileMeta[] = []
+    for (const [dir, dirFiles] of byDir) {
+      if (dirFiles.length > 1) folders.push({ dir, name: getDirectoryBasename(dir), files: dirFiles })
+      else loose.push(...dirFiles)
+    }
+    folders.sort((a, b) => a.dir.localeCompare(b.dir, undefined, { sensitivity: 'base' }))
+    return { groupedFolders: folders, looseFiles: loose }
+  }, [allFiles])
+
+  // Renders one document row; shared by folder-group children and ungrouped files.
+  const renderFileRow = (doc: FileMeta, options?: { noBorder?: boolean }) => {
+    const isModified = modifiedFileIds.includes(doc.id)
+    return (
+      <Box key={doc.id}>
+        <Group
+          px="md"
+          py="sm"
+          justify="space-between"
+          align="center"
+          style={{
+            minHeight: 60,
+            borderBottom: options?.noBorder ? 'none' : '1px solid var(--paper-border-color)',
+          }}
+        >
+          <Group gap="sm" align="center" style={{ flex: 1 }}>
+            <IconFile size={20} color="var(--chatbox-tint-brand)" />
+            <Box style={{ flex: 1 }}>
+              <Group gap="xs" wrap="nowrap" align="baseline">
+                <Text size="sm" fw={500} style={{ flexShrink: 0 }}>
+                  {doc.filename}
+                </Text>
+                {/* Full path: click opens the file manager at the file's folder.
+                    At most 64 characters are displayed: the START of longer paths is
+                    replaced by an ellipsis (RTL layout puts it on the left; LRI/PDI
+                    marks keep mixed-script paths readable). */}
+                <Tooltip
+                  label={`${t('Open file location')}: ${doc.filepath}`}
+                  multiline
+                  w={400}
+                  withArrow
+                  position="top"
+                >
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                    maw="50vw"
+                    className="cursor-pointer"
+                    style={{
+                      textDecoration: 'underline',
+                      textUnderlineOffset: 2,
+                      direction: 'rtl',
+                      textAlign: 'left',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void handleRevealFile(doc.filepath)
+                    }}
+                  >
+                    {'\u2066' + getDisplayPath(doc.filepath) + '\u2069'}
+                  </Text>
+                </Tooltip>
+              </Group>
+              <Group gap="md" mt={2}>
+                <Text size="xs" c="dimmed">
+                  {formatDate(doc.createdAt)}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {formatFileSize(doc.file_size)}
+                </Text>
+                {isModified && (
+                  <Pill size="xs" c="orange" className="cursor-help">
+                    {t('Modified')}
+                  </Pill>
+                )}
+                {doc.status === 'done' && (
+                  <>
+                    <Text
+                      size="xs"
+                      c="dimmed"
+                      style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        chunksPreview.openPreview(doc)
+                      }}
+                    >
+                      {doc.chunk_count} {t('chunks')}
+                    </Text>
+                    {doc.parser_type && (
+                      <Pill size="xs" c="dimmed">
+                        {doc.parser_type === 'chatbox-ai'
+                          ? 'Chatbox AI'
+                          : doc.parser_type === 'mineru'
+                            ? 'MinerU'
+                            : 'Local'}
+                      </Pill>
+                    )}
+                  </>
+                )}
+                {(doc.status === 'processing' || doc.status === 'paused') && doc.total_chunks > 0 && (
+                  <Box style={{ flex: 1, minWidth: 100 }}>
+                    <Group gap="xs" align="center">
+                      <Text
+                        size="xs"
+                        c="dimmed"
+                        style={{ cursor: 'pointer' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          chunksPreview.openPreview(doc)
+                        }}
+                      >
+                        {doc.chunk_count}/{doc.total_chunks} {t('chunks')} (
+                        {getProgressPercentage(doc.chunk_count, doc.total_chunks)}%)
+                      </Text>
+                    </Group>
+                    <Progress
+                      value={getProgressPercentage(doc.chunk_count, doc.total_chunks)}
+                      size="xs"
+                      mt={2}
+                      color={doc.status === 'processing' ? 'blue' : 'orange'}
+                      radius="lg"
+                    />
+                  </Box>
+                )}
+              </Group>
+            </Box>
+          </Group>
+
+          <Group gap="sm" align="center">
+            {doc.status === 'failed' ? (
+              getStatusIcon(doc.status, doc.error, doc.parser_type)
+            ) : (
+              <Center w={20} h={20}>
+                {getStatusIcon(doc.status, doc.error, doc.parser_type)}
+              </Center>
+            )}
+            {doc.status === 'failed' && doc.error !== KNOWLEDGE_BASE_PARSED_CONTENT_TOO_LARGE_ERROR && (
+              <ActionIcon
+                variant="subtle"
+                color="blue"
+                size="sm"
+                onClick={() => handleRetryFile(doc.id)}
+                title={t('Retry locally')}
+              >
+                <IconRefresh size={14} />
+              </ActionIcon>
+            )}
+            {doc.status === 'processing' && (
+              <ActionIcon
+                variant="subtle"
+                color="orange"
+                size="sm"
+                onClick={() => handlePauseFile(doc.id)}
+                title={t('Pause')}
+              >
+                <IconPlayerPause size={14} />
+              </ActionIcon>
+            )}
+            {doc.status === 'paused' && (
+              <ActionIcon
+                variant="subtle"
+                color="green"
+                size="sm"
+                onClick={() => handleResumeFile(doc.id)}
+                title={t('Resume')}
+              >
+                <IconPlayerPlay size={14} />
+              </ActionIcon>
+            )}
+            {/* Always visible: Refresh re-checks the file hash on demand,
+                Update re-indexes the file and is only relevant for modified files */}
+            <ActionIcon
+              variant="subtle"
+              color="blue"
+              size="sm"
+              disabled={!onRefreshFile}
+              loading={recheckingFileIds.includes(doc.id)}
+              onClick={() => handleRefreshSingle(doc.id)}
+              title={t('Refresh')}
+            >
+              <IconRefresh size={14} />
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              color="green"
+              size="sm"
+              disabled={!isModified || !onUpdateFile}
+              loading={updatingFileIds.includes(doc.id)}
+              onClick={() => handleUpdateSingle(doc.id)}
+              title={t('Update')}
+            >
+              <IconRepeat size={14} />
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              size="sm"
+              onClick={() => handleDeleteFile(doc.id)}
+              disabled={doc.status === 'processing'}
+              title={t('Delete')}
+            >
+              <IconTrash size={14} />
+            </ActionIcon>
+          </Group>
+        </Group>
+      </Box>
+    )
+  }
+
   return (
     <Stack>
       <style>
@@ -903,207 +1155,40 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
                   onBottomReached={handleScrollToBottom}
                 >
                   <Stack gap={0}>
-                    {allFiles.map((doc, index) => {
-                      const isModified = modifiedFileIds.includes(doc.id)
-                      return (
-                      <Box key={doc.id}>
-                        <Group
-                          px="md"
-                          py="sm"
-                          justify="space-between"
-                          align="center"
-                          style={{
-                            minHeight: 60,
-                            borderBottom: index < allFiles.length - 1 ? '1px solid var(--paper-border-color)' : 'none',
-                          }}
+                    {/* Folder Foldout groups first (folders holding two or more documents),
+                        then files whose folder contains a single document */}
+                    {groupedFolders.map(({ dir, name, files }, groupIndex) => (
+                      <Box
+                        key={`dir:${dir}`}
+                        px="md"
+                        py="xs"
+                        style={{
+                          borderBottom:
+                            groupIndex < groupedFolders.length - 1 || looseFiles.length > 0
+                              ? '1px solid var(--paper-border-color)'
+                              : 'none',
+                        }}
+                      >
+                        <Foldout
+                          title={
+                            <span className="flex min-w-0 items-center gap-1.5" title={dir || '/'}>
+                              <IconFolder size={14} color="var(--chatbox-tint-warning)" />
+                              <span className="truncate">{name}</span>
+                            </span>
+                          }
+                          summary={`${files.length}`}
                         >
-                          <Group gap="sm" align="center" style={{ flex: 1 }}>
-                            <IconFile size={20} color="var(--chatbox-tint-brand)" />
-                            <Box style={{ flex: 1 }}>
-                              <Group gap="xs" wrap="nowrap" align="baseline">
-                                <Text size="sm" fw={500} style={{ flexShrink: 0 }}>
-                                  {doc.filename}
-                                </Text>
-                                {/* Full path: click opens the file manager at the file's folder.
-                                    The START of long paths is trimmed (ellipsis on the left) so the
-                                    path never takes more than half of the window width. RTL layout
-                                    puts the ellipsis at the left; LRI/PDI marks keep mixed-script
-                                    paths in logical (readable) order. */}
-                                <Tooltip
-                                  label={`${t('Open file location')}: ${doc.filepath}`}
-                                  multiline
-                                  w={400}
-                                  withArrow
-                                  position="top"
-                                >
-                                  <Text
-                                    size="xs"
-                                    c="dimmed"
-                                    maw="50vw"
-                                    className="cursor-pointer"
-                                    style={{
-                                      textDecoration: 'underline',
-                                      textUnderlineOffset: 2,
-                                      direction: 'rtl',
-                                      textAlign: 'left',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap',
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      void handleRevealFile(doc.filepath)
-                                    }}
-                                  >
-                                    {'\u2066' + doc.filepath + '\u2069'}
-                                  </Text>
-                                </Tooltip>
-                              </Group>
-                              <Group gap="md" mt={2}>
-                                <Text size="xs" c="dimmed">
-                                  {formatDate(doc.createdAt)}
-                                </Text>
-                                <Text size="xs" c="dimmed">
-                                  {formatFileSize(doc.file_size)}
-                                </Text>
-                                {isModified && (
-                                  <Pill size="xs" c="orange" className="cursor-help">
-                                    {t('Modified')}
-                                  </Pill>
-                                )}
-                                {doc.status === 'done' && (
-                                  <>
-                                    <Text
-                                      size="xs"
-                                      c="dimmed"
-                                      style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        chunksPreview.openPreview(doc)
-                                      }}
-                                    >
-                                      {doc.chunk_count} {t('chunks')}
-                                    </Text>
-                                    {doc.parser_type && (
-                                      <Pill size="xs" c="dimmed">
-                                        {doc.parser_type === 'chatbox-ai'
-                                          ? 'Chatbox AI'
-                                          : doc.parser_type === 'mineru'
-                                            ? 'MinerU'
-                                            : 'Local'}
-                                      </Pill>
-                                    )}
-                                  </>
-                                )}
-                                {(doc.status === 'processing' || doc.status === 'paused') && doc.total_chunks > 0 && (
-                                  <Box style={{ flex: 1, minWidth: 100 }}>
-                                    <Group gap="xs" align="center">
-                                      <Text
-                                        size="xs"
-                                        c="dimmed"
-                                        style={{ cursor: 'pointer' }}
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          chunksPreview.openPreview(doc)
-                                        }}
-                                      >
-                                        {doc.chunk_count}/{doc.total_chunks} {t('chunks')} (
-                                        {getProgressPercentage(doc.chunk_count, doc.total_chunks)}%)
-                                      </Text>
-                                    </Group>
-                                    <Progress
-                                      value={getProgressPercentage(doc.chunk_count, doc.total_chunks)}
-                                      size="xs"
-                                      mt={2}
-                                      color={doc.status === 'processing' ? 'blue' : 'orange'}
-                                      radius="lg"
-                                    />
-                                  </Box>
-                                )}
-                              </Group>
-                            </Box>
-                          </Group>
-
-                          <Group gap="sm" align="center">
-                            {doc.status === 'failed' ? (
-                              getStatusIcon(doc.status, doc.error, doc.parser_type)
-                            ) : (
-                              <Center w={20} h={20}>
-                                {getStatusIcon(doc.status, doc.error, doc.parser_type)}
-                              </Center>
+                          <Stack gap={0}>
+                            {files.map((groupedDoc, fileIndex) =>
+                              renderFileRow(groupedDoc, { noBorder: fileIndex === files.length - 1 }),
                             )}
-                            {doc.status === 'failed' && doc.error !== KNOWLEDGE_BASE_PARSED_CONTENT_TOO_LARGE_ERROR && (
-                              <ActionIcon
-                                variant="subtle"
-                                color="blue"
-                                size="sm"
-                                onClick={() => handleRetryFile(doc.id)}
-                                title={t('Retry locally')}
-                              >
-                                <IconRefresh size={14} />
-                              </ActionIcon>
-                            )}
-                            {doc.status === 'processing' && (
-                              <ActionIcon
-                                variant="subtle"
-                                color="orange"
-                                size="sm"
-                                onClick={() => handlePauseFile(doc.id)}
-                                title={t('Pause')}
-                              >
-                                <IconPlayerPause size={14} />
-                              </ActionIcon>
-                            )}
-                            {doc.status === 'paused' && (
-                              <ActionIcon
-                                variant="subtle"
-                                color="green"
-                                size="sm"
-                                onClick={() => handleResumeFile(doc.id)}
-                                title={t('Resume')}
-                              >
-                                <IconPlayerPlay size={14} />
-                              </ActionIcon>
-                            )}
-                            {/* Always visible: Refresh re-checks the file hash on demand,
-                                Update re-indexes the file and is only relevant for modified files */}
-                            <ActionIcon
-                              variant="subtle"
-                              color="blue"
-                              size="sm"
-                              disabled={!onRefreshFile}
-                              loading={recheckingFileIds.includes(doc.id)}
-                              onClick={() => handleRefreshSingle(doc.id)}
-                              title={t('Refresh')}
-                            >
-                              <IconRefresh size={14} />
-                            </ActionIcon>
-                            <ActionIcon
-                              variant="subtle"
-                              color="green"
-                              size="sm"
-                              disabled={!isModified || !onUpdateFile}
-                              loading={updatingFileIds.includes(doc.id)}
-                              onClick={() => handleUpdateSingle(doc.id)}
-                              title={t('Update')}
-                            >
-                              <IconRepeat size={14} />
-                            </ActionIcon>
-                            <ActionIcon
-                              variant="subtle"
-                              color="red"
-                              size="sm"
-                              onClick={() => handleDeleteFile(doc.id)}
-                              disabled={doc.status === 'processing'}
-                              title={t('Delete')}
-                            >
-                              <IconTrash size={14} />
-                            </ActionIcon>
-                          </Group>
-                        </Group>
+                          </Stack>
+                        </Foldout>
                       </Box>
-                      )
-                    })}
+                    ))}
+                    {looseFiles.map((doc, index) =>
+                      renderFileRow(doc, { noBorder: index === looseFiles.length - 1 }),
+                    )}
 
                     {/* Loading indicator for next page */}
                     {isFetchingNextPage && (
