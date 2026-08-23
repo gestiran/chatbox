@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ModelSelectorV2 from '@/components/ModelSelectorV2'
 import { AdaptiveModal } from '@/components/common/AdaptiveModal'
+import { Foldout } from '@/components/common/Foldout'
 import { useKnowledgeBases } from '@/hooks/knowledge-base'
 import { BUILTIN_MCP_SERVERS } from '@/packages/mcp/builtin'
 import { skillsController, subscribeSkillsChanged } from '@/packages/skills/controller'
@@ -54,6 +55,13 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
   const [webBrowsingEnabled, setWebBrowsingEnabled] = useState<boolean>(project.settings.webBrowsingEnabled ?? false)
   const [workingDirectories, setWorkingDirectories] = useState<string[]>(project.settings.workingDirectories ?? [])
 
+  // Foldout sections start collapsed on a fresh project and expand automatically
+  // when the project already uses the corresponding feature (kept in sync below).
+  const [mcpFoldoutOpen, setMcpFoldoutOpen] = useState(false)
+  const [knowledgeBaseFoldoutOpen, setKnowledgeBaseFoldoutOpen] = useState(false)
+  const [skillsFoldoutOpen, setSkillsFoldoutOpen] = useState(false)
+  const [webSearchFoldoutOpen, setWebSearchFoldoutOpen] = useState(false)
+
   // NiceModal keeps this modal mounted between shows, and useState initializers
   // only run on the first mount. Without this sync the editor would keep
   // showing (and saving) the previously edited project's values instead of the
@@ -72,6 +80,12 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
     setWebSearchProvider(project.settings.webSearchProvider)
     setWebBrowsingEnabled(project.settings.webBrowsingEnabled ?? false)
     setWorkingDirectories(project.settings.workingDirectories ?? [])
+    setMcpFoldoutOpen(
+      (project.settings.mcpServerIds?.length ?? 0) + (project.settings.mcpBuiltinServerIds?.length ?? 0) > 0
+    )
+    setKnowledgeBaseFoldoutOpen(project.settings.knowledgeBaseId != null)
+    setSkillsFoldoutOpen((project.settings.skillNames?.length ?? 0) > 0)
+    setWebSearchFoldoutOpen(!!project.settings.webSearchProvider || !!project.settings.webBrowsingEnabled)
   }, [project])
 
   const mcpSettings = useMcpSettings()
@@ -138,6 +152,9 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
     modal.hide()
   }
 
+  const mcpSelectionCount = mcpServerIds.length + mcpBuiltinServerIds.length
+  const selectedKnowledgeBase = knowledgeBases?.find((kb) => kb.id === knowledgeBaseId)
+
   const onSave = async () => {
     const settings = {
       ...(provider && modelId ? { provider, modelId } : {}),
@@ -146,7 +163,7 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
       mcpServerIds,
       mcpBuiltinServerIds,
       knowledgeBaseId,
-      knowledgeBaseName: knowledgeBases?.find((kb) => kb.id === knowledgeBaseId)?.name,
+      knowledgeBaseName: selectedKnowledgeBase?.name,
       skillNames,
       webSearchProvider,
       webBrowsingEnabled,
@@ -233,8 +250,12 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
             </Flex>
           </Stack>
 
-          <Stack gap="xs">
-            <Text fw={700}>MCP</Text>
+          <Foldout
+            title="MCP"
+            open={mcpFoldoutOpen}
+            onToggle={setMcpFoldoutOpen}
+            summary={mcpSelectionCount > 0 ? String(mcpSelectionCount) : undefined}
+          >
             {BUILTIN_MCP_SERVERS.map((server) => (
               <Flex key={server.id} justify="space-between" align="center" px="sm" py={6} className="rounded">
                 <Text size="sm">{server.name}</Text>
@@ -255,11 +276,15 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
                 />
               </Flex>
             ))}
-          </Stack>
+          </Foldout>
 
           {knowledgeBaseEnabled && (
-            <Stack gap="xs">
-              <Text fw={700}>{t('Knowledge Base')}</Text>
+            <Foldout
+              title={t('Knowledge Base')}
+              open={knowledgeBaseFoldoutOpen}
+              onToggle={setKnowledgeBaseFoldoutOpen}
+              summary={selectedKnowledgeBase?.name}
+            >
               {(knowledgeBases ?? []).map((kb: KnowledgeBase) => (
                 <UnstyledButton
                   key={kb.id}
@@ -274,11 +299,15 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
                   </Flex>
                 </UnstyledButton>
               ))}
-            </Stack>
+            </Foldout>
           )}
 
-          <Stack gap="xs">
-            <Text fw={700}>Skills</Text>
+          <Foldout
+            title="Skills"
+            open={skillsFoldoutOpen}
+            onToggle={setSkillsFoldoutOpen}
+            summary={skillNames.length > 0 ? String(skillNames.length) : undefined}
+          >
             {skills.length === 0 && (
               <Text size="sm" c="dimmed">
                 {t('No skills available')}
@@ -302,11 +331,15 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
                 py={4}
               />
             ))}
-          </Stack>
+          </Foldout>
 
           {webSearchEnabled && (
-            <Stack gap="xs">
-              <Text fw={700}>{t('Web Search')}</Text>
+            <Foldout
+              title={t('Web Search')}
+              open={webSearchFoldoutOpen}
+              onToggle={setWebSearchFoldoutOpen}
+              summary={webBrowsingEnabled ? t('On') : undefined}
+            >
               <Switch
                 label={t('Enable Web Search for new chats')}
                 checked={webBrowsingEnabled}
@@ -328,7 +361,7 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
                   </Flex>
                 </UnstyledButton>
               ))}
-            </Stack>
+            </Foldout>
           )}
 
           {supportsWorkingDirectories && filesystemToolsEnabled && (
