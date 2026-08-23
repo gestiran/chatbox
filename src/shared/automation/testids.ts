@@ -93,6 +93,7 @@ export const TestId = {
     pauseOnToolCallLimitSwitch: 'settings-pause-on-tool-call-limit',
     sessionPauseOnToolCallLimitSwitch: 'session-settings-pause-on-tool-call-limit',
     notifyOnChatCompletionSwitch: 'settings-notify-on-chat-completion',
+    spellCheckLanguagesInput: 'settings-spell-check-languages',
     defaultChatTypeSelector: 'settings-default-chat-type',
     mcpDefaultFilteringSelector: 'settings-mcp-default-filtering',
   },

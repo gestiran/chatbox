@@ -87,6 +87,7 @@ export function settings(): Settings {
     language: 'en',
     fontSize: 14,
     spellCheck: true,
+    spellCheckLanguages: [],
 
     defaultPrompt: getDefaultPrompt(),
 

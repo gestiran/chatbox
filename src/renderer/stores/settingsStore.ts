@@ -169,6 +169,13 @@ settingsStore.subscribe((state, prevState) => {
   if (Boolean(state.autoLaunch) !== Boolean(prevState.autoLaunch)) {
     platform.ensureAutoLaunch(state.autoLaunch)
   }
+  // 如果拼写检查或其语言配置发生变化，需要同步到 Electron 的 spellchecker
+  if (
+    state.spellCheck &&
+    (state.spellCheckLanguages !== prevState.spellCheckLanguages || state.spellCheck !== prevState.spellCheck)
+  ) {
+    platform.ensureSpellCheckerLanguages(state.spellCheckLanguages ?? [])
+  }
 })
 
 export function useSettingsStore<U>(selector: Parameters<typeof useStore<typeof settingsStore, U>>[1]) {

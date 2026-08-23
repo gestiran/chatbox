@@ -282,6 +282,14 @@ export default class MobilePlatform extends MobileSQLiteStorage implements Platf
     return
   }
 
+  public async ensureSpellCheckerLanguages(languages: string[]) {
+    return
+  }
+
+  public async getAvailableSpellCheckerLanguages(): Promise<string[]> {
+    return []
+  }
+
   async parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean; errorCode?: string }> {
     const result = await parseFileLocallyInBrowser(file)
     if (!result.isSupported) {

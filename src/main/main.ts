@@ -1050,6 +1050,35 @@ ipcMain.handle('window:is-maximized', () => {
   return mainWindow?.isMaximized()
 })
 
+ipcMain.handle('spellchecker:get-available-languages', () => {
+  const ses = mainWindow?.webContents.session
+  if (!ses) {
+    return []
+  }
+  return ses.availableSpellCheckerLanguages
+})
+
+ipcMain.handle('spellchecker:set-languages', (_event, languages: string[]) => {
+  const ses = mainWindow?.webContents.session
+  if (!ses) {
+    return false
+  }
+  try {
+    const available = new Set(ses.availableSpellCheckerLanguages)
+    const selected = [...new Set(Array.isArray(languages) ? languages : [])].filter((lang) => available.has(lang))
+    // Chromium 要求至少启用一种语言：未选择时回退到系统语言
+    const next = selected.length > 0 ? selected : [app.getLocale()].filter((lang) => available.has(lang))
+    if (next.length > 0) {
+      ses.setSpellCheckerLanguages(next)
+      return true
+    }
+    return false
+  } catch (e) {
+    log.error('spellchecker: failed to set languages', e)
+    return false
+  }
+})
+
 registerSandboxHandlers()
 registerSkillsHandlers()
 registerOAuthHandlers()

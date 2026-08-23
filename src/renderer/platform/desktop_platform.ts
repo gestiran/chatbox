@@ -244,6 +244,14 @@ export default class DesktopPlatform implements Platform {
     return this.ipc.invoke('ensureAutoLaunch', enable)
   }
 
+  public async ensureSpellCheckerLanguages(languages: string[]) {
+    return this.ipc.invoke('spellchecker:set-languages', languages)
+  }
+
+  public async getAvailableSpellCheckerLanguages(): Promise<string[]> {
+    return this.ipc.invoke('spellchecker:get-available-languages')
+  }
+
   async parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean; errorCode?: string }> {
     let result: { text: string; isSupported: boolean; errorCode?: string }
     const filePath = this.getLocalFilePath(file)

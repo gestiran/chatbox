@@ -64,6 +64,10 @@ export interface Platform extends Storage {
   getLocale(): Promise<Language>
   ensureShortcutConfig(config: ShortcutSetting): Promise<void>
   ensureProxyConfig(config: { proxy?: string }): Promise<void>
+  /** Sync selected spell checker languages to the Electron session (no-op outside desktop). */
+  ensureSpellCheckerLanguages(languages: string[]): Promise<void>
+  /** Language codes available to the spell checker (empty outside desktop). */
+  getAvailableSpellCheckerLanguages(): Promise<string[]>
   relaunch(): Promise<void>
 
   // 数据配置

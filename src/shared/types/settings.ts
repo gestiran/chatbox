@@ -533,6 +533,7 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
   languageInited: z.boolean().optional(),
   fontSize: z.number().catch(14),
   spellCheck: z.boolean().optional(),
+  spellCheckLanguages: z.array(z.string()).optional(),
 
   startupPage: z.enum(['home', 'session']).optional(),
 

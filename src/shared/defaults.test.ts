@@ -13,6 +13,7 @@ describe('defaults', () => {
     expect(result.language).toBe('en')
     expect(result.fontSize).toBe(14)
     expect(result.spellCheck).toBe(true)
+    expect(result.spellCheckLanguages).toEqual([])
     expect(result.interfaceColors).toEqual(DEFAULT_INTERFACE_COLORS)
     expect(result.interfaceColorPresets).toEqual([])
     expect(result.showWordCount).toBe(false)

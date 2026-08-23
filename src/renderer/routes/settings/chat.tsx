@@ -1,10 +1,23 @@
-import { Box, Button, FileButton, Flex, SegmentedControl, Slider, Stack, Switch, Text, Textarea, Title } from '@mantine/core'
+import {
+  Box,
+  Button,
+  FileButton,
+  Flex,
+  MultiSelect,
+  SegmentedControl,
+  Slider,
+  Stack,
+  Switch,
+  Text,
+  Textarea,
+  Title,
+} from '@mantine/core'
 import { TestId } from '@shared/automation/testids'
 import { chatSessionSettings, getDefaultPrompt } from '@shared/defaults'
 import { MAX_TOOL_CALLS_BEFORE_CONFIRMATION } from '@shared/utils/tool-call-limit-pause'
 import { IconInfoCircle } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AssistantAvatar, UserAvatar } from '@/components/common/Avatar'
 import { Divider } from '@/components/common/Divider'
@@ -14,6 +27,7 @@ import { ScalableIcon } from '@/components/common/ScalableIcon'
 import SliderWithInput from '@/components/common/SliderWithInput'
 import { handleImageInputAndSave, ImageInStorage } from '@/components/Image'
 import { AppTooltip as Tooltip } from '@/components/ui/tooltip'
+import platform from '@/platform'
 import storage from '@/storage'
 import { StorageKeyGenerator } from '@/storage/StoreStorage'
 import { useSettingsStore } from '@/stores/settingsStore'
@@ -431,13 +445,9 @@ export function RouteComponent() {
           <Switch
             label={t('Spell Check')}
             checked={settings.spellCheck}
-            onChange={() =>
-              setSettings({
-                ...settings,
-                spellCheck: !settings.spellCheck,
-              })
-            }
+            onChange={() => setSettings({ spellCheck: !settings.spellCheck })}
           />
+          <SpellCheckLanguagesField disabled={!settings.spellCheck} />
           <Switch
             label={t('Markdown Rendering')}
             checked={settings.enableMarkdownRendering}
@@ -607,5 +617,63 @@ function ContextManagementSection() {
         </Text>
       </Stack>
     </Stack>
+  )
+}
+
+function formatLanguageLabel(code: string, displayLocale?: string): string {
+  try {
+    const displayNames = new Intl.DisplayNames(displayLocale ? [displayLocale, 'en'] : ['en'], {
+      type: 'language',
+    })
+    const name = displayNames.of(code)
+    return name ? `${name} (${code})` : code
+  } catch {
+    return code
+  }
+}
+
+function SpellCheckLanguagesField({ disabled }: { disabled: boolean }) {
+  const { t, i18n } = useTranslation()
+  const spellCheckLanguages = useSettingsStore((state) => state.spellCheckLanguages)
+  const setSettings = useSettingsStore((state) => state.setSettings)
+  const [availableLanguages, setAvailableLanguages] = useState<string[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    platform
+      .getAvailableSpellCheckerLanguages()
+      .then((languages) => {
+        if (!cancelled) {
+          setAvailableLanguages(languages)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const data = useMemo(
+    () =>
+      availableLanguages.map((language) => ({
+        value: language,
+        label: formatLanguageLabel(language, i18n.language),
+      })),
+    [availableLanguages, i18n.language]
+  )
+
+  return (
+    <MultiSelect
+      data-testid={TestId.settings.spellCheckLanguagesInput}
+      label={t('Spell Check Languages')}
+      description={t('Select additional languages for spell checking. Leave empty to use the system language.')}
+      placeholder={t('System language')}
+      data={data}
+      value={spellCheckLanguages ?? []}
+      onChange={(values) => setSettings({ spellCheckLanguages: values })}
+      disabled={disabled || data.length === 0}
+      searchable
+      clearable
+    />
   )
 }

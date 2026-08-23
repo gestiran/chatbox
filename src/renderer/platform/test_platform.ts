@@ -314,6 +314,14 @@ export default class TestPlatform implements Platform {
     // no-op
   }
 
+  public async ensureSpellCheckerLanguages(languages: string[]): Promise<void> {
+    // no-op
+  }
+
+  public async getAvailableSpellCheckerLanguages(): Promise<string[]> {
+    return []
+  }
+
   public async parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean }> {
     // 简单实现：读取文件内容
     try {
