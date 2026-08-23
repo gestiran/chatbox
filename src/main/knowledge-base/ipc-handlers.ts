@@ -7,7 +7,7 @@ import { getDatabase, parseSQLiteTimestamp, withTransaction } from './db'
 import { isExpectedKnowledgeBaseFileStateError } from './error-reporting'
 import { readChunks, searchKnowledgeBase } from './file-loaders'
 import { MineruParser, testMineruConnection } from './parsers'
-import { getKnowledgeBaseVectorStore } from './vector-store'
+import { getKnowledgeBaseVectorStore, getKnowledgeBaseVectorStoreProvider } from './vector-store'
 
 const log = getLogger('knowledge-base:ipc-handlers')
 
@@ -43,7 +43,13 @@ export function registerKnowledgeBaseHandlers() {
     try {
       log.debug('ipcMain: kb:list')
       const db = getDatabase()
-      const rs = await db.execute('SELECT * FROM knowledge_base')
+      // Only list bases that belong to the currently active vector store
+      // provider (legacy rows without the column belong to 'default').
+      const activeProvider = getKnowledgeBaseVectorStoreProvider()
+      const rs = await db.execute('SELECT * FROM knowledge_base WHERE COALESCE(vector_store_provider, ?) = ?', [
+        'default',
+        activeProvider,
+      ])
       return rs.rows.map((row) => ({
         id: row.id,
         name: row.name,
@@ -51,6 +57,7 @@ export function registerKnowledgeBaseHandlers() {
         rerankModel: row.rerank_model,
         visionModel: row.vision_model,
         providerMode: row.provider_mode || undefined,
+        vectorStoreProvider: ((row.vector_store_provider as string) || 'default') as 'default' | 'qdrant',
         documentParser: row.document_parser ? JSON.parse(row.document_parser as string) : undefined,
         createdAt: row.created_at,
       }))
@@ -100,8 +107,11 @@ export function registerKnowledgeBaseHandlers() {
 
         const db = getDatabase()
         const documentParserJson = documentParser ? JSON.stringify(documentParser) : null
+        // Bind the base to the vector store provider that is active at
+        // creation time: its vectors will live in that provider's storage.
+        const vectorStoreProvider = getKnowledgeBaseVectorStoreProvider()
         const rs = await db.execute({
-          sql: 'INSERT INTO knowledge_base (name, embedding_model, rerank_model, vision_model, document_parser, provider_mode) VALUES (?, ?, ?, ?, ?, ?)',
+          sql: 'INSERT INTO knowledge_base (name, embedding_model, rerank_model, vision_model, document_parser, provider_mode, vector_store_provider) VALUES (?, ?, ?, ?, ?, ?, ?)',
           args: [
             name.trim(),
             embeddingModel,
@@ -109,6 +119,7 @@ export function registerKnowledgeBaseHandlers() {
             visionModel || null,
             documentParserJson,
             providerMode || null,
+            vectorStoreProvider,
           ],
         })
         const id = rs.lastInsertRowid

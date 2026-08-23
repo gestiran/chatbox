@@ -3,7 +3,7 @@ import { getSettings } from '../../store-node'
 import { getLogger } from '../../util'
 import { LibsqlKnowledgeBaseVectorStore } from './libsql'
 import { QdrantKnowledgeBaseVectorStore } from './qdrant'
-import type { KnowledgeBaseVectorStore } from './types'
+import type { KnowledgeBaseVectorStore, KnowledgeBaseVectorStoreProvider } from './types'
 
 export * from './types'
 
@@ -15,15 +15,22 @@ let cachedQdrant: { url: string; store: QdrantKnowledgeBaseVectorStore } | null 
 
 /**
  * Resolve the currently selected vector store provider from the settings.
+ */
+export function getKnowledgeBaseVectorStoreProvider(): KnowledgeBaseVectorStoreProvider {
+  const settings = getSettings()
+  return settings.extension?.knowledgeBase?.vectorStore?.provider === 'qdrant' ? 'qdrant' : 'default'
+}
+
+/**
+ * Resolve the configured QDrant URL from the settings.
  * Returns null when the default (built-in) provider should be used.
  */
 function resolveQdrantUrl(): string | null {
-  const settings = getSettings()
-  const vectorStore = settings.extension?.knowledgeBase?.vectorStore
-  if (vectorStore?.provider !== 'qdrant') {
+  if (getKnowledgeBaseVectorStoreProvider() !== 'qdrant') {
     return null
   }
-  return (vectorStore.qdrantUrl ?? '').trim()
+  const settings = getSettings()
+  return (settings.extension?.knowledgeBase?.vectorStore?.qdrantUrl ?? '').trim()
 }
 
 /**

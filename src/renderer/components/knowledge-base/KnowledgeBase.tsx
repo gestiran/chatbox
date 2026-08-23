@@ -8,6 +8,7 @@ import type {
 } from '@shared/types/settings'
 import { parseKnowledgeBaseModelString } from '@shared/utils/knowledge-base-model-parser'
 import { IconAlertTriangle, IconInfoCircle, IconLogin, IconPlus } from '@tabler/icons-react'
+import { useQueryClient } from '@tanstack/react-query'
 import compact from 'lodash/compact'
 import flatten from 'lodash/flatten'
 import type React from 'react'
@@ -120,6 +121,7 @@ const ModelPill: React.FC<ModelPillProps> = ({
 
 const KnowledgeBasePage: React.FC = () => {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const extension = useSettingsStore((state) => state.extension)
   const setSettings = useSettingsStore((state) => state.setSettings)
   const [kbList, setKbList] = useState<KnowledgeBase[]>([])

@@ -8,7 +8,7 @@ import {
   type SessionThread,
   type TokenCountMap,
 } from './types/session'
-import type { DocumentParserConfig, DocumentParserType } from './types/settings'
+import type { DocumentParserConfig, DocumentParserType, KnowledgeBaseVectorStoreProvider } from './types/settings'
 
 export type Updater<T extends object> = Partial<T> | UpdaterFn<T>
 export type UpdaterFn<T extends object> = (data: T | null | undefined) => T
@@ -357,6 +357,9 @@ export interface KnowledgeBase {
   rerankModel: string
   visionModel?: string
   providerMode?: KnowledgeBaseProviderMode
+  // Vector store provider this base belongs to ('default' for legacy rows).
+  // Bases are only visible while their provider is selected in settings.
+  vectorStoreProvider?: KnowledgeBaseVectorStoreProvider
   documentParser?: DocumentParserConfig
   createdAt: number
 }

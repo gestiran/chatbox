@@ -1,10 +1,28 @@
-import { randomUUID } from 'node:crypto'
+import { v5 as uuidv5 } from 'uuid'
 import { getLogger } from '../../util'
 import type { KbChunkContent, KbChunkKey, KbVectorSearchResult, KnowledgeBaseVectorStore } from './types'
 
 const log = getLogger('knowledge-base:vector-store:qdrant')
 
 const REQUEST_TIMEOUT_MS = 30_000
+
+// Fixed RFC 4122 namespace used to derive deterministic point ids (same
+// approach as the QDrant guide: uuidv5 of a stable key, see section "Схема
+// метаданных документа").
+const POINT_ID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
+
+// Maximum number of pages to walk in scroll pagination as a safety net.
+const SCROLL_PAGE_SIZE = 100
+const SCROLL_MAX_PAGES = 1000
+
+/**
+ * Deterministic point id: the same (fileId, chunkIndex) pair always maps to
+ * the same point, so re-uploading a chunk overwrites it instead of creating
+ * duplicates (idempotent upserts, as recommended by the QDrant guide).
+ */
+function pointId(fileId: number, chunkIndex: number): string {
+  return uuidv5(`${fileId}:${chunkIndex}`, POINT_ID_NAMESPACE)
+}
 
 /** Error thrown for non-successful QDrant API responses. */
 export class QdrantApiError extends Error {
@@ -46,7 +64,7 @@ export class QdrantKnowledgeBaseVectorStore implements KnowledgeBaseVectorStore 
     this.baseUrl = baseUrl.replace(/\/+$/, '')
   }
 
-  // ---- Low level API access -------------------------------------------------
+  // ---- Low level API access --------------------------------------------------
 
   private async request<T>(
     method: 'GET' | 'PUT' | 'POST' | 'DELETE',
@@ -87,11 +105,26 @@ export class QdrantKnowledgeBaseVectorStore implements KnowledgeBaseVectorStore 
 
   async collectionExists(collectionName: string): Promise<boolean> {
     try {
-      await this.request('GET', `/collections/${encodeURIComponent(collectionName)}`)
-      return true
+      // GET /collections/{collection_name}/exists - dedicated existence check,
+      // equivalent of client.collectionExists() from the official guide.
+      const result = await this.request<{ exists?: boolean }>(
+        'GET',
+        `/collections/${encodeURIComponent(collectionName)}/exists`
+      )
+      return Boolean(result.result?.exists)
     } catch (error) {
       if (error instanceof QdrantApiError && error.statusCode === 404) {
-        return false
+        // Fallback for older servers without the /exists endpoint:
+        // GET /collections/{collection_name} answers 404 for missing collections.
+        try {
+          await this.request('GET', `/collections/${encodeURIComponent(collectionName)}`)
+          return true
+        } catch (fallbackError) {
+          if (fallbackError instanceof QdrantApiError && fallbackError.statusCode === 404) {
+            return false
+          }
+          throw fallbackError
+        }
       }
       throw error
     }
@@ -109,15 +142,34 @@ export class QdrantKnowledgeBaseVectorStore implements KnowledgeBaseVectorStore 
     await this.request('PUT', `/collections/${encodeURIComponent(indexName)}`, {
       vectors: { size: dimension, distance: 'Cosine' },
     })
+
+    // PUT /collections/{collection_name}/index - payload indexes for the fields
+    // we filter by (client.createPayloadIndex in the official guide). Creating
+    // them before bulk upload keeps filtering fast on large collections.
+    const indexFields: Array<{ field_name: string; field_schema: 'integer' | 'keyword' }> = [
+      { field_name: 'fileId', field_schema: 'integer' },
+      { field_name: 'chunkIndex', field_schema: 'integer' },
+      { field_name: 'filename', field_schema: 'keyword' },
+    ]
+    for (const field of indexFields) {
+      try {
+        await this.request('PUT', `/collections/${encodeURIComponent(indexName)}/index`, field)
+      } catch (error) {
+        // A missing payload index only costs performance, never correctness.
+        log.warn(`[QDRANT] Failed to create payload index for ${field.field_name} in ${indexName}`, error)
+      }
+    }
+
     log.info(`[QDRANT] Created collection: ${indexName} (dimension=${dimension})`)
   }
 
   async upsert(indexName: string, vectors: number[][], metadata: Record<string, unknown>[]): Promise<void> {
     // PUT /collections/{collection_name}/points?wait=true - upload points.
-    // Point ids must be unsigned integers or UUIDs, so every chunk gets a
-    // fresh UUID and carries its metadata inside the point payload.
+    // Point ids must be unsigned integers or UUIDs: every chunk gets a
+    // deterministic UUIDv5 id derived from (fileId, chunkIndex) and carries its
+    // metadata inside the point payload, so retries never create duplicates.
     const points = vectors.map((vector, i) => ({
-      id: randomUUID(),
+      id: pointId(Number(metadata[i]?.fileId ?? 0), Number(metadata[i]?.chunkIndex ?? i)),
       vector,
       payload: metadata[i] ?? {},
     }))
@@ -181,8 +233,6 @@ export class QdrantKnowledgeBaseVectorStore implements KnowledgeBaseVectorStore 
       return []
     }
 
-    // POST /collections/{collection_name}/points/scroll - fetch payloads that
-    // match any of the requested (fileId, chunkIndex) pairs.
     const filter = {
       should: chunks.map((chunk) => ({
         must: [
@@ -191,17 +241,31 @@ export class QdrantKnowledgeBaseVectorStore implements KnowledgeBaseVectorStore 
         ],
       })),
     }
-    const result = await this.request<{ points?: QdrantPoint[] }>(
-      'POST',
-      `/collections/${encodeURIComponent(indexName)}/points/scroll`,
-      {
-        filter,
-        limit: chunks.length,
-        with_payload: true,
-      }
-    )
+    // POST /collections/{collection_name}/points/scroll - fetch payloads that
+    // match any of the requested (fileId, chunkIndex) pairs. Results are
+    // paginated with next_page_offset as recommended by the official guide.
+    const points: QdrantPoint[] = []
+    let offset: string | number | undefined
+    let page = 0
+    do {
+      const response = await this.request<{ points?: QdrantPoint[]; next_page_offset?: string | number | null }>(
+        'POST',
+        `/collections/${encodeURIComponent(indexName)}/points/scroll`,
+        {
+          filter,
+          limit: SCROLL_PAGE_SIZE,
+          with_payload: true,
+          with_vector: false,
+          ...(offset !== undefined ? { offset } : {}),
+        }
+      )
+      points.push(...(response.result?.points ?? []))
+      const nextPage = response.result?.next_page_offset
+      offset = nextPage === null || nextPage === undefined ? undefined : nextPage
+      page += 1
+    } while (offset !== undefined && page < SCROLL_MAX_PAGES)
 
-    return (result.result?.points ?? []).map((point) => {
+    return points.map((point) => {
       const payload = point.payload ?? {}
       return {
         fileId: payload.fileId as number,
