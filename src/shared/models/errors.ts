@@ -89,6 +89,21 @@ export class McpUnavailableError extends BaseError {
   }
 }
 
+/**
+ * The knowledge base selected for the current chat stores its vectors in an
+ * external QDrant server that could not be reached when the user sent a
+ * message. Carries the configured server URL so the UI (and error reports)
+ * can tell the user exactly which endpoint failed.
+ */
+export class KnowledgeBaseUnavailableError extends BaseError {
+  public code = 10008
+  public readonly qdrantUrl: string | undefined
+  constructor(qdrantUrl?: string, message?: string) {
+    super(message ?? `Knowledge Base vector storage (${qdrantUrl ?? 'QDrant'}) is unavailable`)
+    this.qdrantUrl = qdrantUrl
+  }
+}
+
 // 20000 - 29999 为 Chatbox AI 服务错误
 
 // Chatbox AI 服务错误

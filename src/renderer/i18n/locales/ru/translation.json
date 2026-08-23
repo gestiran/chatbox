@@ -1313,6 +1313,7 @@
   "No skills available": "Нет доступных навыков",
   "New chats in this project start with these parameters instead of your defaults.": "Новые чаты этого проекта стартуют с этими параметрами вместо стандартных настроек.",
   "MCP server {{serverNames}} is unavailable. Automatic reconnection failed and the request was aborted. Please check the server in Settings - MCP and try again.": "MCP-сервер {{serverNames}} недоступен. Автоматическое переподключение не удалось, запрос был прерван. Проверьте сервер в Настройки - MCP и попробуйте снова.",
+  "Knowledge Base is unavailable. Connection to the vector database ({{url}}) failed and the request was aborted. Please check the QDrant server address in Settings - Knowledge Base and try again.": "База знаний недоступна. Не удалось подключиться к векторной базе данных ({{url}}), запрос был прерван. Проверьте адрес QDrant-сервера в разделе Настройки - База знаний и попробуйте снова.",
   "Spell Check Languages": "Языки проверки орфографии",
   "Select additional languages for spell checking. Leave empty to use the system language.": "Выберите дополнительные языки для проверки правописания. Если оставить пустым, будет использоваться язык системы.",
   "System language": "Системный язык",

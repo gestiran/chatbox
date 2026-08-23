@@ -18,6 +18,7 @@ const {
   userExecMock,
   ensureSessionMcpServersAvailableMock,
   getSessionMcpAllowListMock,
+  platformState,
 } = vi.hoisted(() => ({
   discoverSkillsMock: vi.fn(),
   installFromSandboxMock: vi.fn(),
@@ -40,6 +41,10 @@ const {
   userExecMock: vi.fn(),
   ensureSessionMcpServersAvailableMock: vi.fn(),
   getSessionMcpAllowListMock: vi.fn(),
+  platformState: {
+    type: 'web' as string,
+    checkConnection: vi.fn(),
+  },
 }))
 
 vi.hoisted(() => {
@@ -59,7 +64,14 @@ vi.hoisted(() => {
 })
 
 vi.mock('@/platform', () => ({
-  default: { type: 'web' },
+  default: {
+    get type() {
+      return platformState.type
+    },
+    getKnowledgeBaseController: () => ({
+      checkConnection: platformState.checkConnection,
+    }),
+  },
 }))
 
 // Deterministic translations: the MCP unavailability message is asserted by
@@ -177,10 +189,14 @@ vi.mock('@/packages/model-calls/toolsets/session-attachment-rag', () => ({
 }))
 
 import type { ModelInterface } from '@shared/models/types'
-import { McpUnavailableError } from '@shared/models/errors'
+import { KnowledgeBaseUnavailableError, McpUnavailableError } from '@shared/models/errors'
 import type { SandboxProvider } from '@shared/sandbox-provider'
 import type { Message } from '@shared/types'
-import { type BuildToolsOptions, buildToolsForSession } from '../tools-builder'
+import {
+  type BuildToolsOptions,
+  buildToolsForSession,
+  resetKnowledgeBaseAvailabilityCache,
+} from '../tools-builder'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -227,6 +243,9 @@ beforeEach(() => {
   for (const listener of skillsChangedListeners) {
     listener()
   }
+  platformState.type = 'web'
+  platformState.checkConnection = vi.fn().mockResolvedValue({ available: true, url: 'http://127.0.0.1:6333' })
+  resetKnowledgeBaseAvailabilityCache()
   getSettingsMock.mockReturnValue({
     skills: { enabledSkillNames: ['test-skill'] },
   })
@@ -1208,5 +1227,82 @@ describe('built-in tool toggles (General Settings)', () => {
     expect(result.tools.user_exec).toBeDefined()
     expect(result.tools.edit_file).toBeDefined()
     expect(result.instructions).toContain('Running Commands in User Environment')
+  })
+})
+
+describe('knowledge base storage availability', () => {
+  function baseOptions(): BuildToolsOptions {
+    return {
+      webBrowsing: false,
+      knowledgeBase: { id: 1, name: 'Product Docs' },
+      messages: [],
+      agentMode: 'off',
+    }
+  }
+
+  test('aborts the request when the QDrant server cannot be reached', async () => {
+    platformState.type = 'desktop'
+    platformState.checkConnection.mockResolvedValue({
+      available: false,
+      url: 'http://127.0.0.1:6333',
+      error: 'Failed to reach QDrant server at http://127.0.0.1:6333: connect ECONNREFUSED 127.0.0.1:6333',
+    })
+
+    const error = await buildToolsForSession(createMockModel(), baseOptions()).then(
+      () => null,
+      (err: unknown) => err
+    )
+
+    expect(error).toBeInstanceOf(KnowledgeBaseUnavailableError)
+    expect((error as Error).message).toContain('http://127.0.0.1:6333')
+    expect((error as Error).message).toContain('ECONNREFUSED')
+    expect(platformState.checkConnection).toHaveBeenCalledTimes(1)
+  })
+
+  test('probes the storage once for desktop chats with an active knowledge base', async () => {
+    platformState.type = 'desktop'
+
+    const result = await buildToolsForSession(createMockModel(), baseOptions())
+
+    expect(result.tools.kb_search).toBeDefined()
+    expect(platformState.checkConnection).toHaveBeenCalledTimes(1)
+  })
+
+  test('reuses a recent positive result instead of re-probing within the TTL', async () => {
+    platformState.type = 'desktop'
+
+    await buildToolsForSession(createMockModel(), baseOptions())
+    await buildToolsForSession(createMockModel(), baseOptions())
+
+    expect(platformState.checkConnection).toHaveBeenCalledTimes(1)
+  })
+
+  test('skips the probe when no knowledge base is selected for the chat', async () => {
+    platformState.type = 'desktop'
+
+    await buildToolsForSession(createMockModel(), { webBrowsing: false, messages: [], agentMode: 'off' })
+
+    expect(platformState.checkConnection).not.toHaveBeenCalled()
+  })
+
+  test('skips the probe when Knowledge Base is disabled in settings', async () => {
+    platformState.type = 'desktop'
+    getSettingsMock.mockReturnValue({
+      skills: { enabledSkillNames: ['test-skill'] },
+      extension: { knowledgeBase: { enabled: false } },
+    })
+
+    const result = await buildToolsForSession(createMockModel(), baseOptions())
+
+    expect(result.tools.kb_search).toBeUndefined()
+    expect(platformState.checkConnection).not.toHaveBeenCalled()
+  })
+
+  test('skips the probe on non-desktop platforms', async () => {
+    // platformState.type stays 'web'
+    const result = await buildToolsForSession(createMockModel(), baseOptions())
+
+    expect(result.tools.kb_search).toBeDefined()
+    expect(platformState.checkConnection).not.toHaveBeenCalled()
   })
 })

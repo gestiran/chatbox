@@ -32,6 +32,13 @@ export interface KnowledgeBaseVectorStore {
   /** Find the most similar vectors for the given query vector. */
   query(indexName: string, queryVector: number[], topK: number): Promise<KbVectorSearchResult[]>
 
+  /**
+   * Verify that the backend server is currently reachable. Resolves silently
+   * when it answers; rejects with the failure reason when the connection
+   * fails. Used to abort chat requests early instead of failing mid-search.
+   */
+  checkConnection(): Promise<void>
+
   /** Drop the whole index/collection. Missing indexes are ignored. */
   deleteIndex(indexName: string): Promise<void>
 

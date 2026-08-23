@@ -1,6 +1,7 @@
 import type {
   FileMeta,
   KnowledgeBase,
+  KnowledgeBaseConnectionStatus,
   KnowledgeBaseFile,
   KnowledgeBaseHashCheckResult,
   KnowledgeBaseSearchOptions,
@@ -27,6 +28,11 @@ export interface KnowledgeBaseController {
   pauseFile(fileId: number): Promise<void>
   resumeFile(fileId: number): Promise<void>
   search(kbId: number, query: string, options?: KnowledgeBaseSearchOptions): Promise<KnowledgeBaseSearchResult[]>
+  /**
+   * Check whether the vector-store backend (QDrant) is reachable right now.
+   * Never rejects over IPC; inspect the returned `available` flag.
+   */
+  checkConnection(): Promise<KnowledgeBaseConnectionStatus>
   update(updateParams: { id: number; name?: string; rerankModel?: string; visionModel?: string }): Promise<void>
   getFilesMeta(
     kbId: number,

@@ -31,7 +31,7 @@ import { SESSION_ATTACHMENT_RAG_LOG_PREFIX } from '../../../shared/session-attac
 import { createAttachmentResolver } from './attachment-resolver'
 import { applyLegacyToolFallback } from './legacy-tool-fallback'
 import { getOCRModel, ocrImagesInMessages } from './ocr-helper'
-import { buildToolsForSession } from './tools-builder'
+import { buildToolsForSession, ensureKnowledgeBaseStorageAvailable } from './tools-builder'
 
 const log = getLogger('agent-generation-harness')
 const RECENT_TOOL_CALL_CACHE_WINDOW_MS = 5 * 60 * 1000
@@ -281,6 +281,13 @@ export async function prepareAgentGenerationHarness(
       }),
     })
   }
+
+  // The knowledge base lives in an external QDrant server. Probe it before
+  // any generation work - including the prompt-engineering fallback below,
+  // which would query the storage first for models without tool-use support -
+  // so an unreachable server aborts the request with a clear error instead of
+  // failing mid-search. No-op without a selected knowledge base.
+  await ensureKnowledgeBaseStorageAvailable(knowledgeBase)
 
   const { promptMsgs: updatedMsgs, fallbackToolCallPart } = await applyLegacyToolFallback({
     model,

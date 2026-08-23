@@ -4,6 +4,7 @@ import {
   ApiError,
   BaseError,
   ChatboxAIAPIError,
+  KnowledgeBaseUnavailableError,
   McpUnavailableError,
   NetworkError,
   OCRError,
@@ -19,6 +20,7 @@ export function isExpectedGenerationError(error: unknown): boolean {
     error instanceof NetworkError ||
     error instanceof ChatboxAIAPIError ||
     error instanceof McpUnavailableError ||
+    error instanceof KnowledgeBaseUnavailableError ||
     error instanceof AIProviderNoImplementedPaintError ||
     APICallError.isInstance(error) ||
     (error instanceof OCRError && error.cause instanceof BaseError)

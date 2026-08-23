@@ -5,6 +5,9 @@ import type { KbChunkContent, KbChunkKey, KbVectorSearchResult, KnowledgeBaseVec
 const log = getLogger('knowledge-base:vector-store:qdrant')
 
 const REQUEST_TIMEOUT_MS = 30_000
+// Short timeout for the connectivity probe: a dead server must be reported to
+// the user quickly instead of stalling the request for the full 30 seconds.
+const CONNECTION_CHECK_TIMEOUT_MS = 5_000
 
 // Fixed RFC 4122 namespace used to derive deterministic point ids (same
 // approach as the QDrant guide: uuidv5 of a stable key, see section "Схема
@@ -131,6 +134,30 @@ export class QdrantKnowledgeBaseVectorStore implements KnowledgeBaseVectorStore 
   }
 
   // ---- KnowledgeBaseVectorStore --------------------------------------------
+
+  async checkConnection(): Promise<void> {
+    let response: Response
+    try {
+      // GET /healthz - dedicated liveness endpoint. It never touches
+      // collections, so it stays cheap even on loaded servers.
+      response = await fetch(`${this.baseUrl}/healthz`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(CONNECTION_CHECK_TIMEOUT_MS),
+      })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      throw new Error(`Failed to reach QDrant server at ${this.baseUrl}: ${reason}`)
+    }
+    // Older QDrant versions answer 404 for unknown endpoints - receiving any
+    // HTTP response at all proves the server is up.
+    if (response.ok || response.status === 404) {
+      return
+    }
+    throw new QdrantApiError(
+      `QDrant health check failed (${response.status} ${response.statusText})`,
+      response.status
+    )
+  }
 
   async createIndex(indexName: string, dimension: number): Promise<void> {
     // PUT /collections/{collection_name} - create the collection with the

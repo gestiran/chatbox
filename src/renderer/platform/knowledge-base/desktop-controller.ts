@@ -62,6 +62,10 @@ class DesktopKnowledgeBaseController implements KnowledgeBaseController {
     return results
   }
 
+  async checkConnection() {
+    return await this.ipc.invoke('kb:check-connection')
+  }
+
   async update(updateParams: { id: number; name?: string; rerankModel?: string; visionModel?: string }) {
     await this.ipc.invoke('kb:update', updateParams)
   }

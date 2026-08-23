@@ -1,12 +1,13 @@
-import { McpUnavailableError } from '@shared/models/errors'
+import { KnowledgeBaseUnavailableError, McpUnavailableError } from '@shared/models/errors'
 import type { ModelInterface } from '@shared/models/types'
 import type { SandboxProvider } from '@shared/sandbox-provider'
-import type { KnowledgeBase, Message, SessionSettings } from '@shared/types'
+import type { KnowledgeBase, KnowledgeBaseConnectionStatus, Message, SessionSettings } from '@shared/types'
 import type { UserExecApprovalSource } from '@shared/types/user-exec'
 import { getMessageText } from '@shared/utils/message'
 import { jsonSchema, type ToolSet } from 'ai'
 import { t } from 'i18next'
 import { trackAgentModeFullAccessBypass } from '@/analytics/agent-mode'
+import platform from '@/platform'
 import { mcpController } from '@/packages/mcp/controller'
 import { generateCommandExplanation } from '@/packages/model-calls/command-explanation'
 import { buildChatboxCliToolSet } from '@/packages/model-calls/toolsets/chatbox-cli'
@@ -70,6 +71,75 @@ function buildMcpUnavailableError(unavailableMcpServers: UnavailableMcpServer[])
     '\n' +
     unavailableMcpServers.map((server) => `- ${server.name}${server.reason ? `: ${server.reason}` : ''}`).join('\n')
   return new McpUnavailableError(serverNames, message)
+}
+
+/**
+ * Builds the error thrown when the QDrant server backing this chat's
+ * knowledge base could not be reached. Mirrors the MCP unavailable error:
+ * the localized sentence explains what happened and the raw failure reason is
+ * appended so the user knows what to fix before retrying.
+ */
+function buildKnowledgeBaseUnavailableError(
+  qdrantUrl?: string,
+  reason?: string
+): KnowledgeBaseUnavailableError {
+  const displayUrl = qdrantUrl || 'QDrant'
+  const message =
+    t(
+      'Knowledge Base is unavailable. Connection to the vector database ({{url}}) failed and the request was aborted. Please check the QDrant server address in Settings - Knowledge Base and try again.',
+      { url: displayUrl }
+    ) + (reason ? `\n${reason}` : '')
+  return new KnowledgeBaseUnavailableError(qdrantUrl, message)
+}
+
+// Positive availability result of the last knowledge-base storage probe. Only
+// successes are cached (briefly): failures re-probe on every send so the
+// request keeps aborting while the server stays down, and recover immediately
+// once it answers again.
+let kbStorageAvailableUntil = 0
+const KB_STORAGE_CHECK_TTL_MS = 5_000
+
+/** Reset the cached positive availability result (used by tests). */
+export function resetKnowledgeBaseAvailabilityCache(): void {
+  kbStorageAvailableUntil = 0
+}
+
+/**
+ * Verify that the external storage behind this chat's knowledge base is
+ * reachable before a message is generated. Throws
+ * KnowledgeBaseUnavailableError (surfaces as a chat error message and aborts
+ * the request) when the configured QDrant server does not respond.
+ *
+ * Skipped when no knowledge base is selected for this chat or Knowledge Base
+ * is disabled in Settings - nothing will query the storage in those cases,
+ * so an unreachable server must not block the request either.
+ */
+export async function ensureKnowledgeBaseStorageAvailable(
+  knowledgeBase?: Pick<KnowledgeBase, 'id' | 'name'>
+): Promise<void> {
+  if (!knowledgeBase || platform.type !== 'desktop') {
+    return
+  }
+  const knowledgeBaseEnabled =
+    settingsStore.getState().getSettings().extension?.knowledgeBase?.enabled !== false
+  if (!knowledgeBaseEnabled) {
+    return
+  }
+  if (Date.now() < kbStorageAvailableUntil) {
+    return
+  }
+
+  let status: KnowledgeBaseConnectionStatus
+  try {
+    status = await platform.getKnowledgeBaseController().checkConnection()
+  } catch (err) {
+    // IPC itself failed - treat it as an unreachable storage too.
+    status = { available: false, error: err instanceof Error ? err.message : String(err) }
+  }
+  if (!status.available) {
+    throw buildKnowledgeBaseUnavailableError(status.url, status.error)
+  }
+  kbStorageAvailableUntil = Date.now() + KB_STORAGE_CHECK_TTL_MS
 }
 
 export interface BuildToolsOptions {
@@ -284,6 +354,13 @@ export async function buildToolsForSession(
   const webSupported = webBrowsing && webSearchEnabled && model.isSupportToolUse('web-browsing')
   const searchProvider = settingActions.getExtensionSettings().webSearch.provider
   const includeParseLinkTool = webSupported && PROVIDERS_WITH_PARSE_LINK.has(searchProvider)
+
+  // The chat's knowledge base stores its vectors in an external QDrant
+  // server. Probe the connection once per request: when the storage cannot be
+  // reached, abort with a clear error instead of letting the model answer
+  // without its documents or failing later mid-search. The helper itself is a
+  // no-op without a selected knowledge base or when the feature is disabled.
+  await ensureKnowledgeBaseStorageAvailable(knowledgeBase)
 
   let kbToolSet: Awaited<ReturnType<typeof getKBToolSet>> | null = null
   if (knowledgeBase && kbSupported) {

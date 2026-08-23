@@ -404,6 +404,18 @@ export interface KnowledgeBaseSearchResult {
 }
 
 /**
+ * Result of the Knowledge Base storage connectivity probe. The probe never
+ * rejects over IPC: callers inspect `available` and show `error` to the user.
+ */
+export interface KnowledgeBaseConnectionStatus {
+  available: boolean
+  /** QDrant server URL that was probed. */
+  url?: string
+  /** Failure reason, present when available is false. */
+  error?: string
+}
+
+/**
  * Options controlling how a knowledge-base search picks the chunks it returns.
  * Configured in Settings / Knowledge Base and applied by the main process.
  */

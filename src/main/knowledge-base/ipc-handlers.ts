@@ -1,5 +1,5 @@
 import { ipcMain, shell } from 'electron'
-import type { FileMeta, KnowledgeBaseSearchOptions } from 'src/shared/types'
+import type { FileMeta, KnowledgeBaseConnectionStatus, KnowledgeBaseSearchOptions } from 'src/shared/types'
 import {
   KNOWLEDGE_BASE_CHUNK_SIZES,
   KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE,
@@ -11,7 +11,7 @@ import { getDatabase, parseSQLiteTimestamp, withTransaction } from './db'
 import { isExpectedKnowledgeBaseFileStateError } from './error-reporting'
 import { checkKnowledgeBaseFilesHashes, queueKnowledgeBaseFilesUpdate, readChunks, searchKnowledgeBase } from './file-loaders'
 import { MineruParser } from './parsers'
-import { getKnowledgeBaseVectorStore } from './vector-store'
+import { getKnowledgeBaseVectorStore, resolveQdrantUrl } from './vector-store'
 
 const log = getLogger('knowledge-base:ipc-handlers')
 
@@ -534,6 +534,27 @@ export function registerKnowledgeBaseHandlers() {
       }
     }
   )
+
+  // Connectivity probe used before a chat message is sent with an active
+  // knowledge base: fails fast when the configured QDrant server cannot be
+  // reached so the request can be aborted with a clear error instead of
+  // failing later mid-search. Never rejects - the renderer decides based on
+  // the returned `available` flag.
+  ipcMain.handle('kb:check-connection', async (): Promise<KnowledgeBaseConnectionStatus> => {
+    const qdrantUrl = resolveQdrantUrl()
+    try {
+      log.debug(`ipcMain: kb:check-connection, url=${qdrantUrl}`)
+      await getKnowledgeBaseVectorStore().checkConnection()
+      return { available: true, url: qdrantUrl }
+    } catch (error: unknown) {
+      log.warn(`ipcMain: kb:check-connection failed, url=${qdrantUrl}`, error)
+      return {
+        available: false,
+        url: qdrantUrl,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
 
   // Retry failed files
   ipcMain.handle('kb:file:retry', async (_event, fileId: number) => {

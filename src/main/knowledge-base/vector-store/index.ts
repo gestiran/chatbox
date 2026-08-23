@@ -21,7 +21,7 @@ let cachedQdrant: { url: string; store: QdrantKnowledgeBaseVectorStore } | null 
  * - A bare host:port without a scheme gets 'http://' prepended (fetch requires
  *   an absolute URL).
  */
-function resolveQdrantUrl(): string {
+export function resolveQdrantUrl(): string {
   const settings = getSettings()
   const rawUrl = (settings.extension?.knowledgeBase?.vectorStore?.qdrantUrl ?? '').trim()
   if (!rawUrl) {
