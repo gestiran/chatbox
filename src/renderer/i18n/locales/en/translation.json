@@ -1331,6 +1331,5 @@
   "Updating {{count}} file(s)...": "Updating {{count}} file(s)...",
   "Failed to update files: {{error}}": "Failed to update files: {{error}}",
   "Open file location": "Open file location",
-  "Modified": "Modified",
-  "Check for changes": "Check for changes"
+  "Modified": "Modified"
 }

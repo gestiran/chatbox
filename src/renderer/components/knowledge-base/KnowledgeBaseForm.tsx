@@ -1,4 +1,4 @@
-import { Button, Group, Input, Select, Stack } from '@mantine/core'
+import { Button, Group, Input, Select } from '@mantine/core'
 import { IconTrash } from '@tabler/icons-react'
 import type React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -15,6 +15,8 @@ interface ModelSelectorsProps {
   onVisionModelChange?: (value: string | null) => void
   isEmbeddingDisabled?: boolean
   showEmbeddingModel?: boolean
+  /** Rendered right after the Embedding Model select (e.g. chunk size). */
+  afterEmbeddingSlot?: React.ReactNode
 }
 
 export const KnowledgeBaseModelSelectors: React.FC<ModelSelectorsProps> = ({
@@ -29,6 +31,7 @@ export const KnowledgeBaseModelSelectors: React.FC<ModelSelectorsProps> = ({
   onVisionModelChange,
   isEmbeddingDisabled = false,
   showEmbeddingModel = true,
+  afterEmbeddingSlot,
 }) => {
   const { t } = useTranslation()
 
@@ -48,6 +51,7 @@ export const KnowledgeBaseModelSelectors: React.FC<ModelSelectorsProps> = ({
           allowDeselect={false}
         />
       )}
+      {afterEmbeddingSlot}
       <Select
         label={t('Rerank Model (optional)')}
         description={t('Used to get more accurate search results')}

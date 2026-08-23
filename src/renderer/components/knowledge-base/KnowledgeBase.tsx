@@ -326,6 +326,16 @@ const KnowledgeBasePage: React.FC = () => {
     }
   }, [t])
 
+  // Newly uploaded files are not auto-indexed - mark them as Modified right
+  // away so they can be reviewed before being sent to the embedding model.
+  const handleFileUploaded = useCallback((kbId: number, fileId: number) => {
+    setModifiedIdsByKb((prev) => {
+      const current = new Set(prev[kbId] ?? [])
+      current.add(fileId)
+      return { ...prev, [kbId]: [...current] }
+    })
+  }, [])
+
   // Check platform compatibility
   useEffect(() => {
     const checkPlatform = async () => {
@@ -509,17 +519,17 @@ const KnowledgeBasePage: React.FC = () => {
               onEmbeddingModelChange={setNewEmbeddingModel}
               onRerankModelChange={setNewRerankModel}
               onVisionModelChange={setNewVisionModel}
-            />
-
-            {/* Chunk size is fixed at creation time and cannot be changed later */}
-            <AdaptiveSelect
-              label={t('Chunk Size')}
-              description={t('Maximum size of one text chunk. Cannot be changed after the base is created.')}
-              data={KNOWLEDGE_BASE_CHUNK_SIZES.map((size) => ({ value: String(size), label: String(size) }))}
-              value={newChunkSize}
-              onChange={(value) => value && setNewChunkSize(value)}
-              allowDeselect={false}
-              maw={320}
+              afterEmbeddingSlot={
+                /* Chunk size is fixed at creation time and cannot be changed later */
+                <AdaptiveSelect
+                  label={t('Chunk Size')}
+                  description={t('Maximum size of one text chunk. Cannot be changed after the base is created.')}
+                  data={KNOWLEDGE_BASE_CHUNK_SIZES.map((size) => ({ value: String(size), label: String(size) }))}
+                  value={newChunkSize}
+                  onChange={(value) => value && setNewChunkSize(value)}
+                  allowDeselect={false}
+                />
+              }
             />
 
             <KnowledgeBaseFormActions
@@ -633,7 +643,9 @@ const KnowledgeBasePage: React.FC = () => {
                             size="xs"
                             variant="subtle"
                             leftSection={<IconRefresh size={14} />}
-                            loading={checkingKbId === kb.id}
+                            // No `loading` here: swapping the label for a loader
+                            // changes the button width and shifts the whole card.
+                            disabled={checkingKbId === kb.id}
                             onClick={() => handleRefreshKb(kb)}
                             title={t('Check all files for changes')}
                           >
@@ -644,7 +656,6 @@ const KnowledgeBasePage: React.FC = () => {
                             variant="subtle"
                             leftSection={<IconRepeat size={14} />}
                             disabled={(modifiedIdsByKb[kb.id] ?? []).length === 0 || updatingKbId === kb.id}
-                            loading={updatingKbId === kb.id}
                             onClick={() => handleUpdateKb(kb)}
                             title={t('Re-index all modified files')}
                           >
@@ -693,6 +704,7 @@ const KnowledgeBasePage: React.FC = () => {
                       modifiedFileIds={modifiedIdsByKb[kb.id] ?? []}
                       onRefreshFile={(fileId) => handleRefreshSingleFile(kb.id, fileId)}
                       onUpdateFile={(fileId) => handleUpdateSingleFile(kb.id, fileId)}
+                      onFileUploaded={(fileId) => handleFileUploaded(kb.id, fileId)}
                     />
                   </Stack>
                 </Paper>

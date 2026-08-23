@@ -1331,6 +1331,5 @@
   "Updating {{count}} file(s)...": "Обновление файлов ({{count}})...",
   "Failed to update files: {{error}}": "Не удалось обновить файлы: {{error}}",
   "Open file location": "Открыть расположение файла",
-  "Modified": "Изменён",
-  "Check for changes": "Проверить изменения"
+  "Modified": "Изменён"
 }

@@ -468,13 +468,15 @@ export function registerKnowledgeBaseHandlers() {
         throw new Error(`Knowledge base ${kbId} not found`)
       }
 
-      // 1. Create file record in database (status: pending)
+      // 1. Create file record in database. New files start with status
+      // 'modified': they are NOT auto-queued for embedding - the user reviews
+      // them first and triggers indexing via "Update".
       log.info(
         `[IPC] Creating file record: kbId=${kbId}, filename=${file.name}, filepath=${file.path}, mimeType=${file.type}, size=${file.size}`
       )
       const rs = await db.execute({
-        sql: 'INSERT INTO kb_file (kb_id, filename, filepath, mime_type, file_size) VALUES (?, ?, ?, ?, ?)',
-        args: [kbId, file.name, file.path, file.type, file.size],
+        sql: `INSERT INTO kb_file (kb_id, filename, filepath, mime_type, file_size, status) VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [kbId, file.name, file.path, file.type, file.size, 'modified'],
       })
       const id = rs.lastInsertRowid
       if (!id) {

@@ -59,6 +59,9 @@ interface KnowledgeBaseDocumentsProps {
   onRefreshFile?: (fileId: number) => Promise<boolean>
   /** Re-index a single modified file. */
   onUpdateFile?: (fileId: number) => void | Promise<void>
+  /** Called with the new file id right after a successful upload. New files
+   * start as "Modified" (not indexed yet). */
+  onFileUploaded?: (fileId: number) => void
 }
 
 interface RejectedFile {
@@ -71,6 +74,7 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
   modifiedFileIds = [],
   onRefreshFile,
   onUpdateFile,
+  onFileUploaded,
 }) => {
   const { t } = useTranslation()
   const [isExpanded, setIsExpanded] = useState(false)
@@ -262,10 +266,18 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
         // Upload all files using allSettled to allow partial successes
         const uploadResults = await Promise.allSettled(
           correctedFiles.map(async (file) => {
-            await knowledgeBaseController.uploadFile(knowledgeBase.id, file)
-            return file
+            const result = await knowledgeBaseController.uploadFile(knowledgeBase.id, file)
+            return { file, fileId: result?.id }
           })
         )
+
+        // Newly uploaded files are not auto-indexed: they start as "Modified"
+        // so they can be reviewed before being sent to the embedding model.
+        for (const result of uploadResults) {
+          if (result.status === 'fulfilled' && result.value.fileId !== undefined) {
+            onFileUploaded?.(result.value.fileId)
+          }
+        }
 
         // Count successes and failures
         const successfulUploads = uploadResults.filter((result) => result.status === 'fulfilled')
@@ -618,6 +630,9 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
         return <IconLoader size={16} color="var(--chatbox-tint-gray)" />
       case 'paused':
         return <IconPlayerPause size={16} color="var(--chatbox-tint-warning)" />
+      case 'modified':
+        // Added to the base but not indexed yet - awaiting "Update"
+        return <IconExclamationCircle size={16} color="var(--chatbox-tint-warning)" />
       case 'failed': {
         const isParsedContentTooLarge = error === KNOWLEDGE_BASE_PARSED_CONTENT_TOO_LARGE_ERROR
         // Determine label based on actual parser type used
@@ -1013,32 +1028,30 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
                                 <IconPlayerPlay size={14} />
                               </ActionIcon>
                             )}
-                            {isModified && doc.status === 'done' && (
-                              <>
-                                <ActionIcon
-                                  variant="subtle"
-                                  color="green"
-                                  size="sm"
-                                  disabled={!onUpdateFile}
-                                  loading={updatingFileIds.includes(doc.id)}
-                                  onClick={() => handleUpdateSingle(doc.id)}
-                                  title={t('Update')}
-                                >
-                                  <IconRepeat size={14} />
-                                </ActionIcon>
-                                <ActionIcon
-                                  variant="subtle"
-                                  color="blue"
-                                  size="sm"
-                                  disabled={!onRefreshFile}
-                                  loading={recheckingFileIds.includes(doc.id)}
-                                  onClick={() => handleRefreshSingle(doc.id)}
-                                  title={t('Check for changes')}
-                                >
-                                  <IconRefresh size={14} />
-                                </ActionIcon>
-                              </>
-                            )}
+                            {/* Always visible: Refresh re-checks the file hash on demand,
+                                Update re-indexes the file and is only relevant for modified files */}
+                            <ActionIcon
+                              variant="subtle"
+                              color="blue"
+                              size="sm"
+                              disabled={!onRefreshFile}
+                              loading={recheckingFileIds.includes(doc.id)}
+                              onClick={() => handleRefreshSingle(doc.id)}
+                              title={t('Refresh')}
+                            >
+                              <IconRefresh size={14} />
+                            </ActionIcon>
+                            <ActionIcon
+                              variant="subtle"
+                              color="green"
+                              size="sm"
+                              disabled={!isModified || !onUpdateFile}
+                              loading={updatingFileIds.includes(doc.id)}
+                              onClick={() => handleUpdateSingle(doc.id)}
+                              title={t('Update')}
+                            >
+                              <IconRepeat size={14} />
+                            </ActionIcon>
                             <ActionIcon
                               variant="subtle"
                               color="red"
