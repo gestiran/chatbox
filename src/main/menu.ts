@@ -1,6 +1,12 @@
-import { app, type BrowserWindow, Menu, MenuItem, type MenuItemConstructorOptions, shell } from 'electron'
+import { app, type BrowserWindow, dialog, Menu, MenuItem, type MenuItemConstructorOptions, shell } from 'electron'
 import log from 'electron-log'
 import Locale from './locales'
+import {
+  canAddToNativeDictionaryAtRuntime,
+  isLiveAddExperimentEnabled,
+  rememberCustomWord,
+  tryAddWordLive,
+} from './spellcheck-dictionary'
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string
@@ -10,8 +16,61 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 export default class MenuBuilder {
   mainWindow: BrowserWindow
 
+  private restartPromptVisible = false
+
   constructor(mainWindow: BrowserWindow) {
     this.mainWindow = mainWindow
+  }
+
+  /**
+   * На Linux нативный API добавления слова в рантайме роняет браузерный
+   * процесс (см. spellcheck-dictionary.ts), поэтому слово применяется только
+   * при старте приложения. Предлагаем пользователю перезапуститься сразу,
+   * чтобы не дожидаться ручного перезапуска.
+   */
+  private async offerRestartToApplyWord(): Promise<void> {
+    if (this.restartPromptVisible) {
+      return
+    }
+    this.restartPromptVisible = true
+    try {
+      const win = this.mainWindow
+      if (!win || win.isDestroyed()) {
+        return
+      }
+      const locale = new Locale()
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'info',
+        message: locale.t('AddToDictionary_RestartRequired'),
+        buttons: [locale.t('Restart'), locale.t('Later')],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      })
+      if (response === 0 && !win.isDestroyed()) {
+        // Слова уже сохранены в persistent-словарь и будут применены
+        // при старте нового экземпляра (см. main.ts → whenReady).
+        app.relaunch()
+        app.quit()
+      }
+    } catch (e) {
+      log.error('spellchecker: failed to show restart prompt', e)
+    } finally {
+      this.restartPromptVisible = false
+    }
+  }
+
+  /**
+   * Экспериментальное мгновенное применение слова без перезапуска
+   * (CHATBOX_SPELLCHECK_LIVE_ADD=1). При неудаче — обычный диалог перезапуска.
+   */
+  private async tryLiveAddThenFallback(word: string): Promise<void> {
+    const win = this.mainWindow
+    const session = win && !win.isDestroyed() ? win.webContents.session : undefined
+    const applied = await tryAddWordLive(word, session)
+    if (!applied) {
+      await this.offerRestartToApplyWord()
+    }
   }
 
   buildMenu(): Menu {
@@ -49,10 +108,39 @@ export default class MenuBuilder {
         items.push({
           label: locale.t('AddToDictionary'),
           click: () => {
-            const added =
-              this.mainWindow.webContents.session.spellchecker.addWordToSpellCheckerDictionary(misspelledWord)
-            if (!added) {
-              log.error(`spellchecker: failed to add "${misspelledWord}" to dictionary`)
+            // Любая ошибка здесь не должна убивать приложение:
+            // process.on('uncaughtException') в main.ts завершает процесс при исключении.
+            try {
+              // 1. Всегда сохраняем слово в собственный persistent-словарь
+              //    (восстанавливается при запуске, см. spellcheck-dictionary.ts).
+              const word = rememberCustomWord(misspelledWord) ?? misspelledWord
+              // 2. На Linux нативный API в рантайме вызывать нельзя — он роняет
+              //    браузерный процесс (см. комментарий в spellcheck-dictionary.ts),
+              //    поэтому там слово подействует после перезапуска.
+              if (!canAddToNativeDictionaryAtRuntime()) {
+                log.info(
+                  `spellchecker: "${word}" saved, it will be applied to the native dictionary on next launch`,
+                )
+                if (isLiveAddExperimentEnabled()) {
+                  void this.tryLiveAddThenFallback(word)
+                } else {
+                  void this.offerRestartToApplyWord()
+                }
+                return
+              }
+              // Electron API: session.addWordToSpellCheckerDictionary(word) возвращает Promise<boolean>.
+              this.mainWindow.webContents.session
+                .addWordToSpellCheckerDictionary(word)
+                .then((added) => {
+                  if (!added) {
+                    log.error(`spellchecker: failed to add "${word}" to dictionary`)
+                  }
+                })
+                .catch((e) => {
+                  log.error(`spellchecker: error while adding "${word}" to dictionary`, e)
+                })
+            } catch (e) {
+              log.error('spellchecker: failed to handle "Add To Dictionary" click', e)
             }
           },
         })

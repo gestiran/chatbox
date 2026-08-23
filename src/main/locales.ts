@@ -75,6 +75,10 @@ const translations = {
     en: 'Add To Dictionary',
     zh: '添加到词典',
   },
+  AddToDictionary_RestartRequired: {
+    en: 'The word has been added to the dictionary. Restart the application now to apply it?',
+    zh: '单词已添加到词典。要立即重启应用以使其生效吗？',
+  },
   ResetZoom: {
     en: 'Reset Zoom',
     zh: '重置缩放',

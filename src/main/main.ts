@@ -43,6 +43,7 @@ import * as proxy from './proxy'
 import { runRipgrepSearch } from './ripgrep-search'
 import { registerSandboxHandlers } from './sandbox'
 import { registerSkillsHandlers } from './skills'
+import { syncCustomWordsWithNativeDictionary } from './spellcheck-dictionary'
 import {
   delStoreBlob,
   getConfig,
@@ -579,6 +580,10 @@ if (quitForInstallRequested) {
   app
     .whenReady()
     .then(async () => {
+      // Восстанавливаем пользовательский словарь ДО создания окон
+      // (см. spellcheck-dictionary.ts): на Linux добавлять слова в нативный
+      // словарь во время работы нельзя — это роняет браузерный процесс.
+      await syncCustomWordsWithNativeDictionary()
       await knowledgeBaseInitPromise
       await createWindow()
       await initializeSessionAttachmentRagAfterAppReady()
