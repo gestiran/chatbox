@@ -155,6 +155,7 @@ export function settings(): Settings {
         queritTimeRange: 'none',
       },
       knowledgeBase: {
+        enabled: true,
         models: {
           embedding: undefined,
           rerank: undefined,

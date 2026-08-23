@@ -267,7 +267,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     }, [sessionWebBrowsingMap, currentSessionId, model?.provider])
     // Master switch from Settings / Web Search. When off, the standalone
     // mobile/web toggle is hidden because web search is unavailable globally.
-    const webSearchEnabled = useSettingsStore((s) => s.extension.webSearch.enabled !== false)
+    const webSearchEnabled = useSettingsStore((s) => s.extension.webSearch?.enabled !== false)
 
     // this is used for keyboard shortcut. if we don't provide this, kbd wont know what to set when it's a new session(it doesnt have provider info)
     useEffect(() => {

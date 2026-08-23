@@ -338,6 +338,9 @@ const ExtensionSettingsSchema = z.object({
   }),
   knowledgeBase: z
     .object({
+      // Master switch (Settings / Knowledge Base). When off, all
+      // knowledge-base UI is hidden and the toolset is never registered.
+      enabled: z.boolean().default(true).catch(true),
       models: z.object({
         embedding: z
           .object({

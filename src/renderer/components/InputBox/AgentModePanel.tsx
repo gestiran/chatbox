@@ -152,7 +152,7 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
   // Web Search state
   // Master switch from Settings / Web Search. When off, the whole Web Search
   // entry point is hidden here and in project settings.
-  const webSearchEnabled = useSettingsStore((s) => s.extension.webSearch.enabled !== false)
+  const webSearchEnabled = useSettingsStore((s) => s.extension.webSearch?.enabled !== false)
   const webSearchProvider = useSettingsStore((s) => s.extension.webSearch.provider)
   const setSettings = useSettingsStore((s) => s.setSettings)
   const licenseKey = useSettingsStore((s) => s.licenseKey)
@@ -176,6 +176,9 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
   // MCP state
   const mcp = useMcpSettings()
   const isPremium = useAutoValidate()
+  // Master switch from Settings / Knowledge Base. When off, the whole
+  // Knowledge Base entry point is hidden here and in project settings.
+  const knowledgeBaseEnabled = useSettingsStore((s) => s.extension.knowledgeBase?.enabled !== false)
 
   // Knowledge Base state
   const { data: knowledgeBases } = useKnowledgeBases()
@@ -893,6 +896,7 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
     }
 
     if (page === 'knowledge-base') {
+      if (!knowledgeBaseEnabled) return null
       return (
         <>
           <SubPanelHeader title={t('Knowledge Base')} settingsPath="/knowledge-base" />
@@ -1166,13 +1170,15 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
             disabled={workModeCapabilitiesDisabled}
           />
 
-          <ExtensionRow
-            icon={<IconVocabulary size={16} className="text-[var(--chatbox-tint-secondary)]" />}
-            label={t('Knowledge Base')}
-            subtitle={selectedKB?.name}
-            active={page === 'knowledge-base'}
-            page="knowledge-base"
-          />
+          {knowledgeBaseEnabled && (
+            <ExtensionRow
+              icon={<IconVocabulary size={16} className="text-[var(--chatbox-tint-secondary)]" />}
+              label={t('Knowledge Base')}
+              subtitle={selectedKB?.name}
+              active={page === 'knowledge-base'}
+              page="knowledge-base"
+            />
+          )}
 
           {supportsWorkingDirectories && filesystemToolsEnabled && (
             <ExtensionRow

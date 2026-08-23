@@ -274,7 +274,10 @@ export async function buildToolsForSession(
   // When code execution is enabled, file tools are replaced by code_execution + sandbox read_file.
   const needFileToolSet = !codeExecution && hasInlineFileOrLink && model.isSupportToolUse('read-file')
   const needSessionAttachmentRagToolSet = sessionAttachmentIds.length > 0 && model.isSupportToolUse('read-file')
-  const kbSupported = Boolean(knowledgeBase) && model.isSupportToolUse('knowledge-base')
+  // Master switch (Settings / Knowledge Base): when off, no chat gets the
+  // knowledge-base toolset regardless of per-session selections.
+  const knowledgeBaseEnabled = globalSettings.extension?.knowledgeBase?.enabled !== false
+  const kbSupported = knowledgeBaseEnabled && Boolean(knowledgeBase) && model.isSupportToolUse('knowledge-base')
   // Master switch (Settings / Web Search): when off, no chat gets the
   // web-search toolset regardless of per-session toggles.
   const webSearchEnabled = globalSettings.extension?.webSearch?.enabled !== false

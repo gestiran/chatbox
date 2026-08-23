@@ -82,7 +82,10 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
   const filesystemToolsEnabled = useSettingsStore((s) => s.enableFilesystemTools !== false)
   // Master switch for Web Search (Settings / Web Search). When it is off, per-project
   // web-search options would have no effect, so the block stays hidden.
-  const webSearchEnabled = useSettingsStore((s) => s.extension.webSearch.enabled !== false)
+  const webSearchEnabled = useSettingsStore((s) => s.extension.webSearch?.enabled !== false)
+  // Master switch for Knowledge Base (Settings / Knowledge Base). When it is off, per-project
+  // knowledge-base options would have no effect, so the block stays hidden.
+  const knowledgeBaseEnabled = useSettingsStore((s) => s.extension.knowledgeBase?.enabled !== false)
 
   // Skills list (same source as the input-box panel)
   const [skills, setSkills] = useState<Array<{ name: string; description: string }>>([])
@@ -254,23 +257,25 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
             ))}
           </Stack>
 
-          <Stack gap="xs">
-            <Text fw={700}>{t('Knowledge Base')}</Text>
-            {(knowledgeBases ?? []).map((kb: KnowledgeBase) => (
-              <UnstyledButton
-                key={kb.id}
-                onClick={() => setKnowledgeBaseId((prev) => (prev === kb.id ? null : kb.id))}
-                className="w-full rounded px-3 py-2 text-left hover:bg-[var(--chatbox-background-tertiary)]"
-              >
-                <Flex justify="space-between" align="center">
-                  <Text size="sm" c={knowledgeBaseId === kb.id ? 'chatbox-brand' : undefined}>
-                    {kb.name}
-                  </Text>
-                  {knowledgeBaseId === kb.id && <IconCheck size={14} color="var(--chatbox-tint-brand)" />}
-                </Flex>
-              </UnstyledButton>
-            ))}
-          </Stack>
+          {knowledgeBaseEnabled && (
+            <Stack gap="xs">
+              <Text fw={700}>{t('Knowledge Base')}</Text>
+              {(knowledgeBases ?? []).map((kb: KnowledgeBase) => (
+                <UnstyledButton
+                  key={kb.id}
+                  onClick={() => setKnowledgeBaseId((prev) => (prev === kb.id ? null : kb.id))}
+                  className="w-full rounded px-3 py-2 text-left hover:bg-[var(--chatbox-background-tertiary)]"
+                >
+                  <Flex justify="space-between" align="center">
+                    <Text size="sm" c={knowledgeBaseId === kb.id ? 'chatbox-brand' : undefined}>
+                      {kb.name}
+                    </Text>
+                    {knowledgeBaseId === kb.id && <IconCheck size={14} color="var(--chatbox-tint-brand)" />}
+                  </Flex>
+                </UnstyledButton>
+              ))}
+            </Stack>
+          )}
 
           <Stack gap="xs">
             <Text fw={700}>Skills</Text>
