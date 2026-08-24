@@ -7,7 +7,7 @@ import * as chatStore from '../chatStore'
 import { createAttachmentResolver } from './attachment-resolver'
 import { createInactiveFork, createNewFork, findMessageLocation } from './forks'
 import { withSessionGenerationLock } from './generation-lock'
-import { insertMessageAfter } from './messages'
+import { insertMessageAfter, modifyMessage } from './messages'
 import { orchestrateGeneration } from './orchestration'
 import { orchestratePictureGeneration } from './pictures'
 
@@ -81,6 +81,14 @@ export async function generateMore(sessionId: string, msgId: string) {
   const session = await chatStore.getSession(sessionId)
   if (!session) {
     return
+  }
+
+  // "Reply Again Below" re-sends the target user message, so refresh its send
+  // timestamp to now. The elapsed-time label above the Stop button is anchored
+  // to the last user message timestamp and must restart on resend.
+  const targetMsg = session.messages.find((message) => message.id === msgId)
+  if (targetMsg && targetMsg.role === 'user') {
+    await modifyMessage(sessionId, { ...targetMsg, timestamp: Date.now() })
   }
 
   // Picture generation has no abort signal yet, so keep it serialized. Chat
