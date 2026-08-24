@@ -1,5 +1,6 @@
 import { isExpectedGenerationError } from '@shared/models/error-classification'
 import { ApiError, BaseError, NetworkError, OCRError } from '@shared/models/errors'
+import { extractStreamErrorMessage } from '@shared/models/utils/stream-error-message'
 import { findMessageContext, findMessageSourceThread } from '@shared/session/message-forks'
 import type {
   AgentModeValue,
@@ -156,7 +157,16 @@ export function handleGenerationError(
   settings: SessionSettings,
   sentryContext?: { operationType?: 'send_message' | 'regenerate'; agentMode?: AgentModeValue }
 ): Message {
-  const error = !(err instanceof Error) ? new Error(`${err}`) : err
+  // Mid-stream provider errors and some IPC/library rejections arrive as plain
+  // objects ({ message, type, code }) rather than Error instances. Interpolating
+  // them yields "[object Object]" and destroys the only clue about the failure,
+  // so normalize through the same extractor used for stream errors.
+  const error = !(err instanceof Error) ? new Error(extractStreamErrorMessage(err)) : err
+  if (!(err instanceof Error)) {
+    // Keep the raw payload visible in logs (CLI/console/Sentry breadcrumbs) so
+    // masked failures remain diagnosable.
+    console.error('[generation-error] non-Error thrown during generation:', err)
+  }
   if (!isExpectedGenerationError(error)) {
     if (sentryContext?.agentMode === 'on') {
       captureAgentModeException(error, {
