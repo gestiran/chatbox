@@ -178,6 +178,11 @@ export function settings(): Settings {
       // Default approval filtering for new chats ('approve' or 'full-access')
       defaultFiltering: 'approve',
     },
+    remote: {
+      enabled: false,
+      botToken: '',
+      allowedUsers: [],
+    },
     skills: {
       enabledSkillNames: [...DEFAULT_ENABLED_BUILTIN_SKILL_NAMES],
       translationEnabled: true,

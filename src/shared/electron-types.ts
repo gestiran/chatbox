@@ -10,6 +10,10 @@ export interface ElectronIPC {
   onNavigate: (callback: (path: string) => void) => () => void
   // 内置 skill 后台同步完成（有更新）时由 main 推送，renderer 据此刷新 skill 列表与工具缓存
   onSkillsBuiltinUpdated: (callback: () => void) => () => void
+  // Remote control (Telegram bot): main pushes raw bot updates / polling status,
+  // the renderer composes every reply (keeps localization in one place).
+  onRemoteTelegramUpdate: (callback: (update: unknown) => void) => () => void
+  onRemoteTelegramStatus: (callback: (status: unknown) => void) => () => void
 
   // Auto-updater events
   onUpdaterChecking: (callback: () => void) => () => void

@@ -50,6 +50,10 @@ const electronHandler: ElectronIPC = {
   },
   onSkillsBuiltinUpdated: createListener('skills:builtin-updated'),
 
+  // Remote control (Telegram bot)
+  onRemoteTelegramUpdate: createListener('remote-telegram:update'),
+  onRemoteTelegramStatus: createListener('remote-telegram:status'),
+
   // Auto-updater events
   onUpdaterChecking: createListener('updater:checking'),
   onUpdaterAvailable: createListener('updater:available'),

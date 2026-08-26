@@ -9,6 +9,7 @@ import {
 } from '../knowledge-base'
 import { DEFAULT_INTERFACE_COLORS, getDefaultInterfaceColors } from '../theme-colors'
 import { ModelProviderEnum, ModelProviderType } from './provider'
+import { RemoteSettingsSchema } from './remote'
 import { DEFAULT_ENABLED_BUILTIN_SKILL_NAMES, SkillSettingsSchema } from './skills'
 
 // Re-export for backward compatibility
@@ -229,6 +230,12 @@ export const SessionSettingsSchema = GlobalSessionSettingsSchema.extend({
   enabledMcpServerIds: z.array(z.string()).optional().catch(undefined),
   enabledMcpBuiltinServerIds: z.array(z.string()).optional().catch(undefined),
   agentMode: AgentModeEntrySchema.optional().catch(undefined),
+  // Optional Remote control via the Telegram bot. When true, chat completion /
+  // interruption notifications are sent to the linked Telegram conversation and
+  // the chat participates in the bot's remote-accessible chats list.
+  // Default is false and the value persists between sessions like every other
+  // per-chat setting.
+  remoteEnabled: z.boolean().optional().catch(undefined),
 })
 
 const UnifiedTokenUsageDetailSchema = z.object({
@@ -624,6 +631,7 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
 
   extension: ExtensionSettingsSchema,
   mcp: MCPSettingsSchema,
+  remote: RemoteSettingsSchema,
   skills: SkillSettingsSchema.catch({
     enabledSkillNames: [...DEFAULT_ENABLED_BUILTIN_SKILL_NAMES],
     translationEnabled: true,
@@ -658,6 +666,7 @@ export type ExtensionSettings = z.infer<typeof ExtensionSettingsSchema>
 export type MCPTransportConfig = z.infer<typeof MCPTransportConfigSchema>
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>
 export type MCPSettings = z.infer<typeof MCPSettingsSchema>
+export type { RemoteSettings, RemoteTelegramUser } from './remote'
 
 // Re-export SkillSettings for convenience
 export type { SkillSettings } from './skills'

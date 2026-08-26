@@ -480,6 +480,32 @@ export function ChatConfig({
           />
         </Flex>
       </Stack>
+
+      <Stack gap="xs" py="xs">
+        <Flex align="center" justify="space-between" gap="xs">
+          <Flex align="center" gap="xs">
+            <Text size="sm" fw="600">
+              {t('Remote Access')}
+            </Text>
+            <Tooltip
+              label={t(
+                'Allow this chat to be controlled via the Telegram bot. The bot notifies you when the reply is ready.'
+              )}
+              withArrow={true}
+              maw={320}
+              className="!whitespace-normal"
+              zIndex={3000}
+            >
+              <ScalableIcon icon={IconInfoCircle} size={20} className="text-chatbox-tint-tertiary" />
+            </Tooltip>
+          </Flex>
+          <Switch
+            data-testid={TestId.settings.sessionRemoteAccessSwitch}
+            checked={settings?.remoteEnabled ?? false}
+            onChange={(v) => onSettingsChange({ remoteEnabled: v.target.checked })}
+          />
+        </Flex>
+      </Stack>
     </Stack>
   )
 }

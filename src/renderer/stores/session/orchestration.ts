@@ -511,6 +511,9 @@ export async function orchestrateGeneration(
     if (finalMessage) {
       markSessionReplyCompleted(sessionId, finalMessage)
       void notifyChatCompletion(sessionId, finalMessage)
+      // Optional Telegram bot notification for chats with Remote access
+      // enabled; also fires on errors/interruptions (finalMessage carries them).
+      void import('@/packages/remote-control').then((m) => m.notifyRemoteCompletion(sessionId, finalMessage!))
     }
   }
 }

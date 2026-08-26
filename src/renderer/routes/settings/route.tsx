@@ -1,6 +1,7 @@
 import { ActionIcon, Box, Flex, Stack, Text } from '@mantine/core'
 import {
   IconAdjustmentsHorizontal,
+  IconAccessPoint,
   IconArchive,
   IconBook,
   IconBox,
@@ -72,6 +73,16 @@ const ITEMS = [
           label: 'Skills',
           noTranslate: true,
           icon: <IconWand className="w-full h-full" />,
+        },
+      ]
+    : []),
+  // Remote control (Telegram bot) is driven by the desktop main process.
+  ...(platform.type === 'desktop'
+    ? [
+        {
+          key: 'remote',
+          label: 'Remote Access',
+          icon: <IconAccessPoint className="w-full h-full" />,
         },
       ]
     : []),

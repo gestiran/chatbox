@@ -92,6 +92,8 @@ export const TestId = {
   settings: {
     pauseOnToolCallLimitSwitch: 'settings-pause-on-tool-call-limit',
     sessionPauseOnToolCallLimitSwitch: 'session-settings-pause-on-tool-call-limit',
+    sessionRemoteAccessSwitch: 'session-settings-remote-access',
+    remoteAccessEnableSwitch: 'settings-remote-access-enable',
     notifyOnChatCompletionSwitch: 'settings-notify-on-chat-completion',
     spellCheckLanguagesInput: 'settings-spell-check-languages',
     defaultChatTypeSelector: 'settings-default-chat-type',

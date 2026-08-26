@@ -37,6 +37,9 @@ export const ProjectSettingsSchema = z.object({
   webBrowsingEnabled: z.boolean().optional().catch(undefined),
   // Working directories granted to the agent sandbox for new project chats
   workingDirectories: z.array(z.string()).optional().catch(undefined),
+  // Remote access (Telegram bot) inherited by new chats created in this project.
+  // Default false; persists with the project between sessions.
+  remoteEnabled: z.boolean().optional().catch(undefined),
 })
 
 export type ProjectSettings = z.infer<typeof ProjectSettingsSchema>

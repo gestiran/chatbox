@@ -1036,6 +1036,8 @@ export function initEmptyChatSession(project?: Project): Omit<Session, 'id'> {
         ? { enabledMcpBuiltinServerIds: projectSettings.mcpBuiltinServerIds }
         : {}),
       ...(projectSettings?.agentMode ? { agentMode: projectSettings.agentMode } : {}),
+      // Optional Telegram-bot Remote access pinned by the project.
+      ...(projectSettings?.remoteEnabled ? { remoteEnabled: true } : {}),
     },
   }
   const systemPrompt =

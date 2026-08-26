@@ -180,6 +180,7 @@ initializeApp()
     if (platform.type === 'desktop') {
       initUpdateListeners()
       initSessionAttachmentRagMaintenance()
+      import('./setup/remote_control_init').then((m) => m.initRemoteControlSafe())
     }
     // Cleanup is intentionally not captured — listeners persist for the app lifetime
 

@@ -43,6 +43,7 @@ import * as proxy from './proxy'
 import { runRipgrepSearch } from './ripgrep-search'
 import { registerSandboxHandlers } from './sandbox'
 import { registerSkillsHandlers } from './skills'
+import { registerRemoteTelegramHandlers } from './telegram-bot'
 import { syncCustomWordsWithNativeDictionary } from './spellcheck-dictionary'
 import {
   delStoreBlob,
@@ -1087,3 +1088,4 @@ ipcMain.handle('spellchecker:set-languages', (_event, languages: string[]) => {
 registerSandboxHandlers()
 registerSkillsHandlers()
 registerOAuthHandlers()
+registerRemoteTelegramHandlers(() => mainWindow)

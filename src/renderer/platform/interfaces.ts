@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: <any> */
+import type { ElectronIPC } from '@shared/electron-types'
 import type {
   SandboxExecLanguage,
   SandboxExecResult,
@@ -27,6 +28,12 @@ export interface Platform extends Storage {
   type: PlatformType
 
   exporter: Exporter
+
+  /**
+   * Raw Electron IPC bridge. Present on the Desktop platform only; other
+   * platforms must not use it (feature code should feature-check first).
+   */
+  ipc?: ElectronIPC
 
   // 系统相关
 

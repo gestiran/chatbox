@@ -33,6 +33,7 @@ import { RouteComponent as SettingsProviderChatboxAiRouteComponent } from '@/rou
 import { RouteComponent as SettingsProviderIndexRouteComponent } from '@/routes/settings/provider/index'
 import { RouteComponent as SettingsProviderRouteRouteComponent } from '@/routes/settings/provider/route'
 import { SettingsRoot } from '@/routes/settings/route'
+import { RouteComponent as SettingsRemoteRouteComponent } from '@/routes/settings/remote'
 import { RouteComponent as SettingsSkillsRouteComponent } from '@/routes/settings/skills'
 import { RouteComponent as SettingsWebSearchRouteComponent } from '@/routes/settings/web-search'
 
@@ -183,6 +184,12 @@ const SettingsSkillsRoute = createRoute({
   getParentRoute: () => RootRoute,
 })
 
+const SettingsRemoteRoute = createRoute({
+  component: SettingsRemoteRouteComponent,
+  path: '/settings/remote',
+  getParentRoute: () => RootRoute,
+})
+
 const SettingsKnowledgeBaseRoute = createRoute({
   component: SettingsKnowledgeBaseRouteComponent,
   path: '/settings/knowledge-base',
@@ -246,6 +253,7 @@ const routeTree = RootRoute.addChildren([
   SettingsWebSearchRoute,
   SettingsMcpRoute,
   SettingsSkillsRoute,
+  SettingsRemoteRoute,
   SettingsKnowledgeBaseRoute,
   SettingsDocumentParserRoute,
   SettingsHotkeysRoute,

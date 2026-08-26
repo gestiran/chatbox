@@ -91,6 +91,7 @@ function buildDefaultProjectSettings(): ProjectSettings {
     skillNames: [...settings.skills.enabledSkillNames],
     webSearchProvider: settings.extension.webSearch.provider,
     webBrowsingEnabled: false,
+    remoteEnabled: false,
     workingDirectories: [],
   }
 }

@@ -54,6 +54,7 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
   )
   const [webBrowsingEnabled, setWebBrowsingEnabled] = useState<boolean>(project.settings.webBrowsingEnabled ?? false)
   const [workingDirectories, setWorkingDirectories] = useState<string[]>(project.settings.workingDirectories ?? [])
+  const [remoteEnabled, setRemoteEnabled] = useState<boolean>(project.settings.remoteEnabled ?? false)
 
   // Foldout sections start collapsed on a fresh project and expand automatically
   // when the project already uses the corresponding feature (kept in sync below).
@@ -80,6 +81,7 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
     setWebSearchProvider(project.settings.webSearchProvider)
     setWebBrowsingEnabled(project.settings.webBrowsingEnabled ?? false)
     setWorkingDirectories(project.settings.workingDirectories ?? [])
+    setRemoteEnabled(project.settings.remoteEnabled ?? false)
     setMcpFoldoutOpen(
       (project.settings.mcpServerIds?.length ?? 0) + (project.settings.mcpBuiltinServerIds?.length ?? 0) > 0
     )
@@ -168,6 +170,7 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
       webSearchProvider,
       webBrowsingEnabled,
       workingDirectories,
+      remoteEnabled,
     }
     const updated = await updateProject(project.id, { name: name.trim() || project.name, settings })
     modal.resolve(updated)
@@ -409,6 +412,16 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
               </Button>
             </Stack>
           )}
+
+          <Stack gap="xs">
+            <Flex align="center" justify="space-between" gap="xs">
+              <Text fw={700}>{t('Remote Access')}</Text>
+              <Switch checked={remoteEnabled} onChange={(event) => setRemoteEnabled(event.currentTarget.checked)} />
+            </Flex>
+            <Text size="xs" c="dimmed">
+              {t('New chats in this project can be controlled via the Telegram bot and notify you when done.')}
+            </Text>
+          </Stack>
 
           <Stack gap="xs">
             <Flex gap="xs" align="center">
