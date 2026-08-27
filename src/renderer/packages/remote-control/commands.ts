@@ -134,8 +134,8 @@ async function handleChats(context: RemoteContext, reply: ReplyFn) {
   }
   const lines = chats.map((session, index) => {
     const project = projectNameById(session.projectId)
-    const suffix = project ? ` · ${project}` : ''
-    return `${index + 1}. ${session.name}${suffix}`
+    const projectPart = project ? `${project} | ` : ''
+    return `${index + 1}. ${projectPart}${session.name}`
   })
   await reply([t('Chats with remote access:'), ...lines].join('\n'))
 }

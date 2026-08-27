@@ -14,7 +14,7 @@ vi.mock('@/storage', () => ({
   },
 }))
 
-import { bindSession, dismissPendingUser, forgetSessionBinding, getSessionBinding, notePendingUser, remoteUiStore } from './registry'
+import { bindSession, dismissPendingUser, forgetSessionBinding, getSessionBinding, notePendingUser, remoteUiStore, unbindSession } from './registry'
 
 beforeEach(() => {
   kvStore.clear()
@@ -23,16 +23,37 @@ beforeEach(() => {
 describe('session ↔ telegram chat bindings', () => {
   it('binds a session to a telegram chat and reads it back', async () => {
     await bindSession('s1', '100')
-    expect(await getSessionBinding('s1')).toBe('100')
-    expect(kvStore.get('remote-control:session-bindings')).toEqual({ s1: '100' })
+    expect(await getSessionBinding('s1')).toEqual(['100'])
+    expect(kvStore.get('remote-control:session-bindings')).toEqual({ s1: ['100'] })
+  })
+
+  it('deduplicates the same chat for a session', async () => {
+    await bindSession('s1', '100')
+    await bindSession('s1', '100')
+    expect(await getSessionBinding('s1')).toEqual(['100'])
+  })
+
+  it('accumulates multiple chats for the same session', async () => {
+    await bindSession('s1', '100')
+    await bindSession('s1', '200')
+    expect(await getSessionBinding('s1')).toEqual(['100', '200'])
   })
 
   it('forgets stale bindings', async () => {
     await bindSession('s1', '100')
     await bindSession('s2', '200')
     await forgetSessionBinding('s1')
-    expect(await getSessionBinding('s1')).toBeUndefined()
-    expect(await getSessionBinding('s2')).toBe('200')
+    expect(await getSessionBinding('s1')).toEqual([])
+    expect(await getSessionBinding('s2')).toEqual(['200'])
+  })
+
+  it('unbinds a single chat without affecting others', async () => {
+    await bindSession('s1', '100')
+    await bindSession('s1', '200')
+    await unbindSession('s1', '100')
+    expect(await getSessionBinding('s1')).toEqual(['200'])
+    await unbindSession('s1', '200')
+    expect(await getSessionBinding('s1')).toEqual([])
   })
 
   it('forgetting an unknown binding is a no-op', async () => {

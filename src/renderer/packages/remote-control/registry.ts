@@ -11,7 +11,7 @@ import storage from '@/storage'
  */
 const BINDINGS_STORAGE_KEY = 'remote-control:session-bindings'
 
-type SessionBindings = Record<string, string>
+type SessionBindings = Record<string, string[]>
 
 let bindingsCache: SessionBindings | null = null
 
@@ -33,13 +33,14 @@ async function writeBindings(bindings: SessionBindings): Promise<void> {
 
 export async function bindSession(sessionId: string, telegramChatId: string): Promise<void> {
   const bindings = await readBindings()
-  if (bindings[sessionId] === telegramChatId) return
-  await writeBindings({ ...bindings, [sessionId]: telegramChatId })
+  const existing = bindings[sessionId] ?? []
+  if (existing.includes(telegramChatId)) return
+  await writeBindings({ ...bindings, [sessionId]: [...existing, telegramChatId] })
 }
 
-export async function getSessionBinding(sessionId: string): Promise<string | undefined> {
+export async function getSessionBinding(sessionId: string): Promise<string[]> {
   const bindings = await readBindings()
-  return bindings[sessionId]
+  return bindings[sessionId] ?? []
 }
 
 export async function forgetSessionBinding(sessionId: string): Promise<void> {
@@ -48,6 +49,19 @@ export async function forgetSessionBinding(sessionId: string): Promise<void> {
   const next = { ...bindings }
   delete next[sessionId]
   await writeBindings(next)
+}
+
+export async function unbindSession(sessionId: string, telegramChatId: string): Promise<void> {
+  const bindings = await readBindings()
+  const existing = bindings[sessionId]
+  if (!existing) return
+  const next = existing.filter((id) => id !== telegramChatId)
+  if (next.length === 0) {
+    delete bindings[sessionId]
+  } else {
+    bindings[sessionId] = next
+  }
+  await writeBindings(bindings)
 }
 
 /**

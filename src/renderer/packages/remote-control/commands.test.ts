@@ -116,14 +116,14 @@ function makeSession(partial: Partial<Session>): Session {
   } as Session
 }
 
-function textUpdate(text: string, userId = 42): TelegramUpdate {
+function textUpdate(text: string, userId = 42, chatId = 100): TelegramUpdate {
   return {
     update_id: 1,
     message: {
       message_id: 1,
       date: Math.floor(Date.now() / 1000),
       from: { id: userId, first_name: 'Tester' },
-      chat: { id: 100, type: 'private', first_name: 'Tester' },
+      chat: { id: chatId, type: 'private', first_name: 'Tester' },
       text,
     },
   }
@@ -188,7 +188,7 @@ describe('handleTelegramUpdate – /chats', () => {
     const text = await lastReplyText()
     expect(text).toContain('Chats with remote access:')
     expect(text).toContain('Chat One')
-    expect(text).toContain('My Project')
+    expect(text).toContain('My Project | Chat One')
   })
 
   it('reports when no chats have Remote access', async () => {
@@ -219,9 +219,21 @@ describe('handleTelegramUpdate – /msg', () => {
     expect(sessionId).toBe('s1')
     expect(params.needGenerating).toBe(true)
     // Completion notifications are delivered back to this Telegram chat.
-    expect(kvStore.get('remote-control:session-bindings')).toMatchObject({ s1: '100' })
+    expect(kvStore.get('remote-control:session-bindings')).toMatchObject({ s1: ['100'] })
 
     expect(await lastReplyText()).toBe('Message sent to "{{name}}".')
+  })
+
+  it('deduplicates the same chat when the same command is issued twice', async () => {
+    await handleTelegramUpdate(textUpdate('/msg 1 hello there'))
+    await handleTelegramUpdate(textUpdate('/msg 1 second message'))
+    expect(kvStore.get('remote-control:session-bindings')).toMatchObject({ s1: ['100'] })
+  })
+
+  it('accumulates different chats for the same session', async () => {
+    await handleTelegramUpdate(textUpdate('/msg 1 hello there', 42, 100))
+    await handleTelegramUpdate(textUpdate('/msg 1 second message', 42, 200))
+    expect(kvStore.get('remote-control:session-bindings')).toMatchObject({ s1: ['100', '200'] })
   })
 
   it('replies "No access." for an out-of-range or malformed target', async () => {

@@ -7,7 +7,7 @@ import { isSuccessfulAssistantReply } from '@/stores/session/message-success'
 import { settingsStore } from '@/stores/settingsStore'
 import { sendTelegramMessage } from './bridge'
 import { formatCompletionNotification } from './format'
-import { bindSession, forgetSessionBinding, getSessionBinding } from './registry'
+import { bindSession, unbindSession, getSessionBinding } from './registry'
 
 const log = getLogger('remote-control-completion')
 
@@ -30,8 +30,8 @@ export async function notifyRemoteCompletion(sessionId: string, finalMessage: Me
     if (!session) return
     if (session.settings?.remoteEnabled !== true) return
 
-    const chatId = await getSessionBinding(sessionId)
-    if (!chatId) return
+    const chatIds = await getSessionBinding(sessionId)
+    if (chatIds.length === 0) return
 
     const projectName = session.projectId
       ? ((await loadProjects()).find((project) => project.id === session.projectId)?.name ?? undefined)
@@ -45,24 +45,26 @@ export async function notifyRemoteCompletion(sessionId: string, finalMessage: Me
       error: finalMessage.error,
     })
 
-    const result = await sendTelegramMessage(chatId, text, {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: i18n.t('Read last request'),
-              callback_data: `read:${sessionId}`,
-            },
+    for (const chatId of chatIds) {
+      const result = await sendTelegramMessage(chatId, text, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: i18n.t('Read last request'),
+                callback_data: `read:${sessionId}`,
+              },
+            ],
           ],
-        ],
-      },
-    })
+        },
+      })
 
-    // "chat not found" means the bound Telegram conversation is gone (bot
-    // blocked, chat deleted): drop the stale binding so future completions do
-    // not keep failing silently.
-    if (!result.ok && result.error?.includes('chat not found')) {
-      await forgetSessionBinding(sessionId)
+      // "chat not found" means the bound Telegram conversation is gone (bot
+      // blocked, chat deleted): drop only this stale chat binding so future
+      // completions do not keep failing silently.
+      if (!result.ok && result.error?.includes('chat not found')) {
+        await unbindSession(sessionId, chatId)
+      }
     }
   } catch (error) {
     log.error('Failed to send remote completion notification:', error)
