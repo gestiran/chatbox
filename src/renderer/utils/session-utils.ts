@@ -1,4 +1,4 @@
-import type { Session, SessionMeta, SessionMetaRecord } from '@shared/types'
+import type { Message, Session, SessionMeta, SessionMetaRecord } from '@shared/types'
 import { mapValues } from 'lodash'
 import { finalizeStaleGeneratingMessage, migrateMessage } from '../../shared/utils/message'
 
@@ -6,6 +6,16 @@ import { finalizeStaleGeneratingMessage, migrateMessage } from '../../shared/uti
 // they spin forever in the UI and are silently dropped from every model context.
 function loadMessage(message: Parameters<typeof migrateMessage>[0]) {
   return finalizeStaleGeneratingMessage(migrateMessage(message))
+}
+
+// The "Forked from conversation" marker was a UI-only assistant message that
+// sat at the end of a duplicated session. It leaked into model context and
+// corrupted the last-turn grouping (the reported "empty branch" / "message sent
+// ignoring the last turn" bugs). The feature is removed, so strip any marker a
+// session still carries on load; it is a pure removal that never re-points
+// compaction boundaries (a marker was never a boundary message).
+function withoutForkMarkers(messages: Message[] | undefined): Message[] {
+  return (messages ?? []).filter((message) => !message.isForkMarker).map((message) => loadMessage(message))
 }
 
 export function migrateSession(session: Session): Session {
@@ -16,17 +26,17 @@ export function migrateSession(session: Session): Session {
       temperature: undefined,
       ...session.settings,
     },
-    messages: session.messages?.map((m) => loadMessage(m)) || [],
+    messages: withoutForkMarkers(session.messages),
     threads: session.threads?.map((t) => ({
       ...t,
-      messages: t.messages.map((m) => loadMessage(m)) || [],
+      messages: withoutForkMarkers(t.messages),
     })),
     messageForksHash: mapValues(session.messageForksHash || {}, (forks) => ({
       ...forks,
       lists:
         forks.lists?.map((list) => ({
           ...list,
-          messages: list.messages?.map((m) => loadMessage(m)) || [],
+          messages: withoutForkMarkers(list.messages),
         })) || [],
     })),
   }

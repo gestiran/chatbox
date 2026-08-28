@@ -863,10 +863,8 @@ describe('fork actions', () => {
     const copiedThreadPivotId = newSession.threads?.[0].messages[0].id
     expect(copiedThreadPivotId).toBeDefined()
     expect(newSession.messageForksHash?.[copiedThreadPivotId!]).toBeDefined()
-    expect(newSession.messages.filter((message) => message.isForkMarker)).toHaveLength(1)
-    expect(newSession.messages.at(-1)?.id).toBe('copied-fork-marker')
-    expect(newSession.messages.at(-1)?.isForkMarker).toBe(true)
-    expect(newSession.messages.at(-1)?.forkedFromSessionId).toBe(session.id)
+    expect(newSession.messages.filter((message) => message.isForkMarker)).toHaveLength(0)
+    expect(newSession.messages.at(-1)?.id).toBe('copied-root-reply')
     expect(newSession.settings?.agentMode).toEqual({ value: 'on', locked: true, lockReason: 'message_sent' })
     expect(setSessionAgentModeMock).not.toHaveBeenCalled()
     expect(lockSessionAgentModeMock).not.toHaveBeenCalled()

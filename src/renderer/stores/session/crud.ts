@@ -2,7 +2,6 @@ import {
   copyMessageForksWithMapping,
   copyMessagesWithMapping,
   copyThreadsWithMapping,
-  createMessage,
   remapCompactionPoints,
   type Session,
   type SessionMeta,
@@ -59,9 +58,6 @@ async function copySession(
     messageForksHash?: Session['messageForksHash']
     compactionPoints?: Session['compactionPoints']
   },
-  options?: {
-    appendForkMarker?: boolean
-  }
 ) {
   const source = await chatStore.getSession(sourceMeta.id)
   if (!source) {
@@ -69,9 +65,7 @@ async function copySession(
   }
 
   const sourceMessages = sourceMeta.messages ?? source.messages
-  const messagesToCopy = options?.appendForkMarker
-    ? sourceMessages.filter((message) => !message.isForkMarker)
-    : sourceMessages
+  const messagesToCopy = sourceMessages.filter((message) => !message.isForkMarker)
 
   // Copy messages and get ID mapping
   const { messages: newMessages, idMapping } = copyMessagesWithMapping(messagesToCopy)
@@ -101,19 +95,10 @@ async function copySession(
 
   const newCompactionPoints = remapCompactionPoints(sourceCompactionPoints, fullIdMapping, 'copySession')
 
-  const copiedMessages = [...newMessages]
-  if (options?.appendForkMarker) {
-    copiedMessages.push({
-      ...createMessage('assistant'),
-      isForkMarker: true,
-      forkedFromSessionId: source.id,
-    })
-  }
-
   const newSession = {
     ...omit(source, 'id', 'messages', 'threads', 'messageForksHash', 'compactionPoints'),
     ...(sourceMeta.name ? { name: sourceMeta.name } : {}),
-    messages: copiedMessages,
+    messages: newMessages,
     threads: newThreads,
     messageForksHash: newMessageForksHash,
     compactionPoints: newCompactionPoints?.length ? newCompactionPoints : undefined,
@@ -126,7 +111,7 @@ async function copySession(
  * Copy session and switch to it
  */
 export async function copyAndSwitchSession(source: SessionMeta) {
-  const newSession = await copySession(source, { appendForkMarker: true })
+  const newSession = await copySession(source)
   switchCurrentSession(newSession.id)
 }
 

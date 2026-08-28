@@ -81,10 +81,6 @@ vi.mock('./SummaryMessage', () => ({
   default: () => null,
 }))
 
-vi.mock('./ForkMarkerMessage', () => ({
-  default: () => null,
-}))
-
 vi.mock('../ActionMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))

@@ -47,7 +47,6 @@ import { ErrorBoundary } from '../common/ErrorBoundary'
 import { ScalableIcon } from '../common/ScalableIcon'
 import { BlockCodeCollapsedStateProvider } from '../Markdown'
 import ForkGroup from './ForkGroup'
-import ForkMarkerMessage from './ForkMarkerMessage'
 import Message from './Message'
 import MessageMinimapRail, { type MessageMinimapAnchor } from './MessageMinimapRail'
 import MessageNavigation, { ScrollToBottomButton } from './MessageNavigation'
@@ -401,12 +400,7 @@ const MessageList = forwardRef<MessageListRef, MessageListProps>((props, ref) =>
             <ThreadLabel thread={currentThreadHash[msg.id]} sessionId={currentSession.id} />
           )}
           <ErrorBoundary name={`message-item`}>
-            {msg.isForkMarker ? (
-              <ForkMarkerMessage
-                sourceSessionId={msg.forkedFromSessionId}
-                className={options.isFirstItem ? 'pt-4' : options.isLastItem ? '!pb-4' : ''}
-              />
-            ) : msg.isSummary ? (
+            {msg.isSummary ? (
               <SummaryMessage
                 msg={msg}
                 className={options.isFirstItem ? 'pt-4' : options.isLastItem ? '!pb-4' : ''}

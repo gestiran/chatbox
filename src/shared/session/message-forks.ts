@@ -347,19 +347,21 @@ export function buildCreateForkPatch(session: Session, forkMessageId: string): P
 
       const tailStart = forkTailStartIndex(messages, forkMessageIndex)
       const backupMessages = messages.slice(tailStart)
-      if (backupMessages.length === 0) {
+      // Skip fork markers — they are UI-only boundaries from copied sessions
+      // and must not become part of a fork branch.
+      const filteredBackupMessages = backupMessages.filter((m) => !m.isForkMarker)
+      if (filteredBackupMessages.length === 0) {
         return null
       }
-
       const storedListId = `fork_list_${uuidv4()}`
       const newBranchId = `fork_list_${uuidv4()}`
       const lists = forkEntry.lists.map((list, index) =>
         index === forkEntry.position
-          ? {
-              id: storedListId,
-              messages: backupMessages,
-            }
-          : list
+        ? {
+            id: storedListId,
+            messages: filteredBackupMessages,
+          }
+        : list
       )
       const nextPosition = lists.length
       const updatedFork: MessageForkEntry = {
