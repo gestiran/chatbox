@@ -486,10 +486,14 @@ In long conversations, earlier tool call results may be automatically compressed
       enabledSkills,
       options.sessionSettings?.agentFullAccess === true,
       userExecWorkingDirectory,
-      includeCodeExecutionToolSet
-    )
-    tools.load_skill = buildLoadSkillTool(options)
-    if (enabledSkills.some((skill) => skill.name === 'chatbox-product-info')) {
+     includeCodeExecutionToolSet
+   )
+    // Only register load_skill when there is at least one enabled skill;
+    // otherwise the tool would be callable but the system prompt says "No skills are currently enabled."
+    if (enabledSkills.length > 0) {
+      tools.load_skill = buildLoadSkillTool(options)
+    }
+   if (enabledSkills.some((skill) => skill.name === 'chatbox-product-info')) {
       const chatboxCliToolSet = buildChatboxCliToolSet({
         sessionId: options.sessionId,
         onUsed: options.onAgentModeActivated,
@@ -502,7 +506,7 @@ In long conversations, earlier tool call results may be automatically compressed
     if (includeCodeExecutionToolSet) {
       tools.user_exec = buildUserExecTool(options)
     }
-    if (codeExecution) {
+    if (includeCodeExecutionToolSet && codeExecution) {
       tools.install_skill = buildInstallSkillTool(options)
     }
   }

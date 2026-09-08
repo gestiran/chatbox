@@ -386,6 +386,22 @@ describe('buildToolsForSession', () => {
     expect(result.tools.list_files).toBeDefined()
   })
 
+  test('agentMode="on" with 0 enabled skills — load_skill is not registered', async () => {
+    getSettingsMock.mockReturnValue({
+      skills: { enabledSkillNames: [] },
+    })
+    const model = createMockModel()
+    const result = await buildToolsForSession(model, {
+      webBrowsing: false,
+      messages: [],
+      agentMode: 'on',
+    })
+
+    expect(result.tools.load_skill).toBeUndefined()
+    expect(result.instructions).toContain('## Skills')
+    expect(result.instructions).toContain('No skills are currently enabled.')
+  })
+
   test('aborts the request when an active MCP server stays unavailable after reconnection', async () => {
     ensureSessionMcpServersAvailableMock.mockResolvedValue([
       { id: 'srv-1', name: 'Broken MCP', reason: 'connection refused' },
@@ -1202,6 +1218,9 @@ describe('built-in tool toggles (General Settings)', () => {
     expect(result.tools.search_files).toBeUndefined()
     expect(result.tools.write_file).toBeUndefined()
     expect(result.tools.edit_file).toBeUndefined()
+    // load_skill must stay available — skills are independent of filesystem tools
+    expect(result.tools.load_skill).toBeDefined()
+    expect(result.instructions).toContain('### Available Skills')
   })
 
   test('omits Run Command and sandbox tools when enableCodeExecutionTools is false', async () => {
@@ -1213,6 +1232,11 @@ describe('built-in tool toggles (General Settings)', () => {
     expect(result.tools.user_exec).toBeUndefined()
     expect(result.tools.code_execution).toBeUndefined()
     expect(result.tools.create_download).toBeUndefined()
+    // install_skill depends on code_execution being available to the model
+    expect(result.tools.install_skill).toBeUndefined()
+    // load_skill must stay available — skills are independent of code execution tools
+    expect(result.tools.load_skill).toBeDefined()
+    expect(result.instructions).toContain('### Available Skills')
     expect(result.instructions).not.toContain('Running Commands in User Environment')
     expect(result.instructions).not.toContain('Installing Skills')
   })
