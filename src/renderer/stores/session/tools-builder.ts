@@ -479,8 +479,12 @@ In long conversations, earlier tool call results may be automatically compressed
   // Skills tools: agent mode only, requires model support
   if (includeAgentTools) {
     const allSkills = await getDiscoveredSkills()
-    const skillSettings = globalSettings.skills
-    const enabledSkills = allSkills.filter((s) => skillSettings.enabledSkillNames.includes(s.name))
+    // Skills follow the same per-chat pattern as MCP: the session may pin its
+    // own selection (baked from the project at creation time); undefined falls
+    // back to the global defaults (settings.skills.enabledSkillNames).
+    const globalSkillNames = globalSettings.skills.enabledSkillNames
+    const effectiveSkillNames = options.sessionSettings?.skillNames ?? globalSkillNames
+    const enabledSkills = allSkills.filter((s) => effectiveSkillNames.includes(s.name))
     const userExecWorkingDirectory = options.sessionSettings?.workingDirectories?.find((dir) => dir.trim().length > 0)
     instructions += buildSkillToolsInstruction(
       enabledSkills,
@@ -536,8 +540,9 @@ function buildLoadSkillTool(options: BuildToolsOptions): ToolSet[string] {
     }),
     execute: async (input) => {
       const skillInput = input as { name: string }
-      const skillSettings = settingsStore.getState().getSettings().skills
-      if (!skillSettings.enabledSkillNames.includes(skillInput.name)) {
+      const globalSkillNames = settingsStore.getState().getSettings().skills.enabledSkillNames
+      const effectiveSkillNames = options.sessionSettings?.skillNames ?? globalSkillNames
+      if (!effectiveSkillNames.includes(skillInput.name)) {
         return {
           error: `Skill "${skillInput.name}" is not enabled. Check available skills in the system instructions.`,
         }

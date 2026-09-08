@@ -1036,6 +1036,11 @@ export function initEmptyChatSession(project?: Project): Omit<Session, 'id'> {
         ? { enabledMcpBuiltinServerIds: projectSettings.mcpBuiltinServerIds }
         : {}),
       ...(projectSettings?.agentMode ? { agentMode: projectSettings.agentMode } : {}),
+      // Per-chat skills pinned by the project. Legacy projects may still omit
+      // the field, in which case generation keeps the historical fallback.
+      ...(projectSettings?.skillNames !== undefined
+        ? { skillNames: projectSettings.skillNames }
+        : {}),
       // Optional Telegram-bot Remote access pinned by the project.
       ...(projectSettings?.remoteEnabled ? { remoteEnabled: true } : {}),
     },

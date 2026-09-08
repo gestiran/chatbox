@@ -48,7 +48,10 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
   const [mcpServerIds, setMcpServerIds] = useState<string[]>(project.settings.mcpServerIds ?? [])
   const [mcpBuiltinServerIds, setMcpBuiltinServerIds] = useState<string[]>(project.settings.mcpBuiltinServerIds ?? [])
   const [knowledgeBaseId, setKnowledgeBaseId] = useState<number | null>(project.settings.knowledgeBaseId ?? null)
-  const [skillNames, setSkillNames] = useState<string[]>(project.settings.skillNames ?? [])
+  // The fallback only supports legacy project objects that have not passed
+  // through loadProjects migration yet.
+  const globalEnabledSkillNames = useSettingsStore((s) => s.skills.enabledSkillNames)
+  const [skillNames, setSkillNames] = useState<string[]>(project.settings.skillNames ?? globalEnabledSkillNames)
   const [webSearchProvider, setWebSearchProvider] = useState<ProjectWebSearchProvider | undefined>(
     project.settings.webSearchProvider
   )
@@ -77,7 +80,7 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
     setMcpServerIds(project.settings.mcpServerIds ?? [])
     setMcpBuiltinServerIds(project.settings.mcpBuiltinServerIds ?? [])
     setKnowledgeBaseId(project.settings.knowledgeBaseId ?? null)
-    setSkillNames(project.settings.skillNames ?? [])
+    setSkillNames(project.settings.skillNames ?? globalEnabledSkillNames)
     setWebSearchProvider(project.settings.webSearchProvider)
     setWebBrowsingEnabled(project.settings.webBrowsingEnabled ?? false)
     setWorkingDirectories(project.settings.workingDirectories ?? [])
@@ -87,6 +90,11 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
     )
     setKnowledgeBaseFoldoutOpen(project.settings.knowledgeBaseId != null)
     setSkillsFoldoutOpen((project.settings.skillNames?.length ?? 0) > 0)
+    // ^^^ also true when following global defaults with enabled skills
+    // (skillNames state is pre-populated from global in that case)
+    if (!project.settings.skillNames && globalEnabledSkillNames.length > 0) {
+      setSkillsFoldoutOpen(true)
+    }
     setWebSearchFoldoutOpen(!!project.settings.webSearchProvider || !!project.settings.webBrowsingEnabled)
   }, [project])
 
@@ -166,6 +174,8 @@ const ProjectSettingsModal = NiceModal.create(({ project }: ProjectSettingsModal
       mcpBuiltinServerIds,
       knowledgeBaseId,
       knowledgeBaseName: selectedKnowledgeBase?.name,
+      // An empty array is meaningful: all skills are disabled for this
+      // project. Never turn it into undefined (which means global fallback).
       skillNames,
       webSearchProvider,
       webBrowsingEnabled,

@@ -36,6 +36,18 @@ describe('ProjectSchema', () => {
     expect(first.name).toBe(second.name)
   })
 
+  test('preserves an explicitly empty project skill selection', () => {
+    const project = ProjectSchema.parse({
+      id: 'no-skills',
+      name: 'No Skills',
+      createdAt: 1,
+      sortOrder: 1,
+      settings: { skillNames: [] },
+    })
+
+    expect(project.settings.skillNames).toEqual([])
+  })
+
   test('falls back to empty settings on invalid values', () => {
     const project = ProjectSchema.parse({
       id: 'p2',

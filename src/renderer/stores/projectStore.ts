@@ -54,8 +54,26 @@ async function persistProjects(projects: Project[]) {
 /** Loads persisted projects into the store. Safe to call multiple times. */
 export async function loadProjects(): Promise<Project[]> {
   const stored = await storage.getItem<Project[]>(STORAGE_KEY, [])
-  const projects = Array.isArray(stored) ? stored : []
+  const globalEnabledSkillNames = settingsStore.getState().skills.enabledSkillNames
+  let migratedSkillSettings = false
+  const projects = (Array.isArray(stored) ? stored : []).map((project) => {
+    if (project.settings?.skillNames !== undefined) return project
+
+    migratedSkillSettings = true
+    return {
+      ...project,
+      settings: {
+        ...project.settings,
+        // Older projects followed the mutable global value. Give each of them
+        // its own snapshot so subsequent global changes cannot alter it.
+        skillNames: [...globalEnabledSkillNames],
+      },
+    }
+  })
   setProjects(projects.sort((a, b) => b.sortOrder - a.sortOrder))
+  if (migratedSkillSettings) {
+    await persistProjects(projectStore.getState().projects)
+  }
   // Restore the persisted foldout open/closed states so the sidebar looks the
   // same after an app restart.
   const expanded = await storage.getItem<Record<string, boolean>>(EXPANDED_PROJECTS_STORAGE_KEY, {})
@@ -88,6 +106,8 @@ function buildDefaultProjectSettings(): ProjectSettings {
     mcpServerIds: settings.mcp.servers.filter((server) => server.enabled).map((server) => server.id),
     mcpBuiltinServerIds: [...settings.mcp.enabledBuiltinServers],
     knowledgeBaseId: null,
+    // A project owns its defaults. Chats created inside it inherit this
+    // snapshot and global skill toggles remain independent.
     skillNames: [...settings.skills.enabledSkillNames],
     webSearchProvider: settings.extension.webSearch.provider,
     webBrowsingEnabled: false,
@@ -285,8 +305,8 @@ export async function deleteProjectWithChats(projectId: string): Promise<void> {
 }
 
 /**
- * Applies the global-side parts of a project's starting parameters (MCP utils,
- * skills, web-search provider) so a chat created "now" runs with them. MCP is
+ * Applies the global-side parts of a project's starting parameters (web-search
+ * provider) so a chat created "now" runs with them. MCP and skills are
  * intentionally NOT applied globally anymore: the project's selection is baked
  * into the new chat's own settings (see initEmptyChatSession), keeping chats
  * independent from each other and from the global defaults.
@@ -295,12 +315,6 @@ function applyGlobalProjectSettings(project: Project) {
   const { setSettings } = settingsStore.getState()
   const projectSettings = project.settings
 
-  if (projectSettings.skillNames) {
-    const skillNames = [...projectSettings.skillNames]
-    setSettings((draft) => {
-      draft.skills.enabledSkillNames = skillNames
-    })
-  }
   if (projectSettings.webSearchProvider) {
     const provider = projectSettings.webSearchProvider
     setSettings((draft) => {

@@ -558,6 +558,19 @@ export async function deleteSessions(ids: string[]) {
   }
 }
 
+/**
+ * Permanently delete every archived session. Bypasses the paginated cache to
+ * collect all archived IDs, then delegates to {@link deleteSessions}.
+ */
+export async function deleteAllArchivedSessions() {
+  console.debug('chatStore', 'deleteAllArchivedSessions')
+  const metaStorage = await getMetaStorage()
+  const archived = await metaStorage.getArchived()
+  const ids = archived.map((record) => record.id)
+  if (ids.length === 0) return
+  await deleteSessions(ids)
+}
+
 // MARK: session settings operations
 
 function mergeDefaultSessionSettings(session: Session): SessionSettings {

@@ -289,7 +289,14 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     const latestInputRef = useRef('')
     const [hasTextContent, setHasTextContent] = useState(false)
     const draftMessageIdRef = useRef<string | undefined>(undefined)
-    const enabledSkillNames = useSettingsStore((state) => state.skills.enabledSkillNames)
+    const globalEnabledSkillNames = useSettingsStore((state) => state.skills.enabledSkillNames)
+    const { session: currentSession } = useSession(sessionId || null)
+    const { sessionSettings: currentSessionMergedSettings } = useSessionSettings(sessionId || null)
+
+    // Per-chat skills: the session may pin its own selection (baked from the
+    // project at creation time); undefined falls back to the global default.
+    // This must be declared before the skill-command memo below uses it.
+    const enabledSkillNames = currentSessionMergedSettings?.skillNames ?? globalEnabledSkillNames
     const [inputSkills, setInputSkills] = useState<Array<{ name: string; description: string }>>([])
     const [inputSkillsLoading, setInputSkillsLoading] = useState(false)
     const [skillCommandQuery, setSkillCommandQuery] = useState<string | null>(null)
@@ -399,9 +406,6 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     }, [preConstructedMessage.draftMessageId])
     const pictureKeys = preConstructedMessage.pictureKeys || []
     const attachments = preConstructedMessage.attachments || []
-
-    const { session: currentSession } = useSession(sessionId || null)
-    const { sessionSettings: currentSessionMergedSettings } = useSessionSettings(sessionId || null)
 
     // The elapsed-time label above the Stop button is anchored to the timestamp of
     // the last user message stored in the session (not to component-local state),

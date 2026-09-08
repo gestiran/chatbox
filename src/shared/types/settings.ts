@@ -229,6 +229,11 @@ export const SessionSettingsSchema = GlobalSessionSettingsSchema.extend({
   // toggling MCP in one chat never affects other chats or the global default.
   enabledMcpServerIds: z.array(z.string()).optional().catch(undefined),
   enabledMcpBuiltinServerIds: z.array(z.string()).optional().catch(undefined),
+  // Per-chat skill availability. When undefined the chat follows the global
+  // enabled skills (settings.skills.enabledSkillNames); an array pins this
+  // chat's own selection, so toggling skills in one chat never affects other
+  // chats or the global default.
+  skillNames: z.array(z.string()).optional().catch(undefined),
   agentMode: AgentModeEntrySchema.optional().catch(undefined),
   // Optional Remote control via the Telegram bot. When true, chat completion /
   // interruption notifications are sent to the linked Telegram conversation and

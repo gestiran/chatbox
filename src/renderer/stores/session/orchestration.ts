@@ -49,7 +49,7 @@ import {
   parseAgentModeSuggestionDecision,
 } from './agent-mode-suggestion'
 import { createAttachmentResolver } from './attachment-resolver'
-import { notifyChatCompletion } from './chat-completion-notification'
+import { notifyChatCompletion, notifyChatError } from './chat-completion-notification'
 import { findMessageLocation } from './forks'
 import { cancelRunningToolCallBatch, finishAbortedGeneration } from './generation-cancellation'
 import { withSessionGenerationLock } from './generation-lock'
@@ -511,6 +511,7 @@ export async function orchestrateGeneration(
     if (finalMessage) {
       markSessionReplyCompleted(sessionId, finalMessage)
       void notifyChatCompletion(sessionId, finalMessage)
+      void notifyChatError(sessionId, finalMessage)
       // Optional Telegram bot notification for chats with Remote access
       // enabled; also fires on errors/interruptions (finalMessage carries them).
       void import('@/packages/remote-control').then((m) => m.notifyRemoteCompletion(sessionId, finalMessage!))

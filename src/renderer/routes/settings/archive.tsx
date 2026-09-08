@@ -1,3 +1,4 @@
+import NiceModal from '@ebay/nice-modal-react'
 import { ActionIcon, Button, Flex, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import type { SessionMetaRecord } from '@shared/types'
 import { IconArchiveOff, IconTrash } from '@tabler/icons-react'
@@ -7,7 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { AssistantAvatar } from '@/components/common/Avatar'
 import { ScalableIcon } from '@/components/common/ScalableIcon'
 import { AppTooltip as Tooltip } from '@/components/ui/tooltip'
-import { confirmSessionDeletion, deleteSession, restoreSession, useArchivedSessionList } from '@/stores/chatStore'
+import { confirmSessionDeletion, deleteAllArchivedSessions, deleteSession, restoreSession, useArchivedSessionList } from '@/stores/chatStore'
 
 export const Route = createFileRoute('/settings/archive')({
   component: RouteComponent,
@@ -18,6 +19,7 @@ export function RouteComponent() {
   const { archivedSessionMetaList, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useArchivedSessionList()
   const [busySessionIds, setBusySessionIds] = useState<Set<string>>(() => new Set())
+  const [removingAll, setRemovingAll] = useState(false)
 
   const setSessionBusy = (sessionId: string, busy: boolean) => {
     setBusySessionIds((current) => {
@@ -31,14 +33,46 @@ export function RouteComponent() {
     })
   }
 
+  const handleRemoveAll = async () => {
+    const confirmed = await NiceModal.show('confirm', {
+      title: t('Remove all archived chats?'),
+      message: t('This will permanently delete all archived chats. This action cannot be undone.'),
+      confirmText: t('Remove All'),
+      danger: true,
+    })
+    if (!confirmed) return
+    setRemovingAll(true)
+    try {
+      await deleteAllArchivedSessions()
+    } catch (error) {
+      console.error('Failed to remove all archived sessions:', error)
+    } finally {
+      setRemovingAll(false)
+    }
+  }
+
   return (
     <Stack p="md" gap="xl">
-      <Stack gap="xxs">
-        <Title order={5}>{t('Archived Chats')}</Title>
-        <Text size="sm" c="chatbox-tertiary">
-          {t('Archived chats are hidden from the chat list. You can restore or permanently delete them here.')}
-        </Text>
-      </Stack>
+      <Group justify="space-between" align="flex-start" wrap="nowrap" gap="md">
+        <Stack gap="xxs">
+          <Title order={5}>{t('Archived Chats')}</Title>
+          <Text size="sm" c="chatbox-tertiary">
+            {t('Archived chats are hidden from the chat list. You can restore or permanently delete them here.')}
+          </Text>
+        </Stack>
+        {archivedSessionMetaList?.length ? (
+          <Tooltip label={t('Remove All')} openDelay={1000} withArrow position="left">
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              loading={removingAll}
+              onClick={handleRemoveAll}
+            >
+              <ScalableIcon icon={IconTrash} size={18} />
+            </ActionIcon>
+          </Tooltip>
+        ) : null}
+      </Group>
 
       {isLoading ? (
         <Flex justify="center" py="xl">

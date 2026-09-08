@@ -139,6 +139,7 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
   const [subPanelTop, setSubPanelTop] = useState<number>(0)
   const isNewSession = sessionId === 'new'
   const { session: currentSession } = useSession(isNewSession ? null : sessionId)
+  const { sessionSettings } = useSessionSettings(sessionId)
 
   // Agent mode state
   const setAgentModeSmartSwitchingDefault = useUIStore((s) => s.setAgentModeSmartSwitchingDefault)
@@ -187,7 +188,8 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
   const [skills, setSkills] = useState<Array<{ name: string; description: string }>>([])
   const [skillsLoading, setSkillsLoading] = useState(false)
   const [skillsVersion, setSkillsVersion] = useState(0)
-  const enabledSkillNames = useSettingsStore((s) => s.skills.enabledSkillNames)
+  const globalEnabledSkillNames = useSettingsStore((s) => s.skills.enabledSkillNames)
+  const enabledSkillNames = sessionSettings?.skillNames ?? globalEnabledSkillNames
   // Master switch for the built-in filesystem toolset (Settings / General). When it is off,
   // working-directory bindings have no effect, so the related UI is hidden as well.
   const filesystemToolsEnabled = useSettingsStore((s) => s.enableFilesystemTools !== false)
@@ -265,7 +267,6 @@ const AgentModePanel: FC<AgentModePanelProps> = ({
   // (see routes/index.tsx) — mirroring how knowledge base / web browsing are handled.
   const newSessionState = useUIStore((s) => s.newSessionState)
   const setNewSessionState = useUIStore((s) => s.setNewSessionState)
-  const { sessionSettings } = useSessionSettings(sessionId)
 
   // MCP availability is per chat. An existing chat reads/writes its own pinned
   // selection in session settings; a brand-new chat stages it in newSessionState
