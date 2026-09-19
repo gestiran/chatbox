@@ -617,10 +617,19 @@ export async function getModelManifest(params: { aiProvider: ModelProvider; lice
       retry: 2,
     }
   )
-  const { success, data, error } = ModelManifestResponseSchema.safeParse(await res.json())
+  const json = await res.json()
+  const { success, data, error } = ModelManifestResponseSchema.safeParse(json)
   if (!success) {
-    log.error('getModelManifest error', error)
-    throw error
+    // The server returned an unexpected payload (e.g. `data.models` missing or
+    // not an array). Log the raw response for diagnosis and surface a readable
+    // error instead of a cryptic ZodError.
+    let payloadSnippet = ''
+    try {
+      payloadSnippet = JSON.stringify(json)?.slice(0, 500) ?? ''
+    } catch {}
+    log.error('getModelManifest error: unexpected response format', error, 'payload:', payloadSnippet)
+    const details = error.issues.map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`).join('; ')
+    throw new Error(`Invalid model manifest response from server (${details})`)
   }
   return data.data
 }

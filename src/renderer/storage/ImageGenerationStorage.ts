@@ -1,4 +1,5 @@
 import type { ImageGeneration, ImageGenerationPage } from '@shared/types'
+import { openDatabaseWithRecovery } from './indexeddb-open'
 
 const PAGE_SIZE = 20
 const DB_NAME = 'chatbox-image-generation'
@@ -22,29 +23,29 @@ export class IndexedDBImageGenerationStorage implements ImageGenerationStorage {
     if (this.initPromise) {
       return this.initPromise
     }
-    this.initPromise = this.openDatabase()
+    this.initPromise = this.openDatabase().catch((error) => {
+      // Do not cache a rejected promise forever: reset it so a later call can
+      // retry initialization (e.g. after recovering from a corrupted store).
+      this.initPromise = null
+      throw error
+    })
     return this.initPromise
   }
 
-  private openDatabase(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1)
-
-      request.onerror = () => reject(request.error)
-
-      request.onsuccess = () => {
-        this.db = request.result
-        resolve()
-      }
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result
+  private async openDatabase(): Promise<void> {
+    // openDatabaseWithRecovery handles the Chromium
+    // `UnknownError: Internal error.` backing-store corruption by deleting
+    // and recreating the database so the app stays usable.
+    this.db = await openDatabaseWithRecovery(
+      DB_NAME,
+      (db) => {
         if (!db.objectStoreNames.contains(STORE_NAME)) {
           const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' })
           store.createIndex('createdAt', 'createdAt', { unique: false })
         }
-      }
-    })
+      },
+      1
+    )
   }
 
   private getStore(mode: IDBTransactionMode): IDBObjectStore {

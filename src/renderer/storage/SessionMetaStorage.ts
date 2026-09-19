@@ -1,6 +1,7 @@
 import type { SessionMetaRepositoryPort } from '@shared/ports'
 import type { SessionMetaPage, SessionMetaRecord } from '@shared/types'
 import { sortSessionRecords } from '@shared/utils/session-sort'
+import { openDatabaseWithRecovery } from './indexeddb-open'
 
 const DB_NAME = 'chatbox-session-meta'
 const STORE_NAME = 'records'
@@ -42,46 +43,43 @@ export class IndexedDBSessionMetaStorage implements SessionMetaStorage {
     if (this.initPromise) {
       return this.initPromise
     }
-    this.initPromise = this.openDatabase()
+    this.initPromise = this.openDatabase().catch((error) => {
+      // Do not cache a rejected promise forever: reset it so a later call can
+      // retry initialization (e.g. after recovering from a corrupted store).
+      this.initPromise = null
+      throw error
+    })
     return this.initPromise
   }
 
-  private openDatabase(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      // 这些索引只是性能优化，没有很强的 schema 迁移理由，去掉了强制指定 version。
-      // bump 后用户回退版本会因 VersionError 打不开 session meta DB，导致降级使用失败：
-      // `The requested version (X) is less than the existing version (Y)` —— 例如 1.22 → 1.21 降级后无法发消息。
-      // 如确需引入 version/schema 变更：只做加法式变更（新 store/索引，keyPath 不变），
-      // 并捕获 VersionError 后以不带 version 的 `indexedDB.open(DB_NAME)` 重试，让旧版本客户端仍能打开新 schema。
-      const request = indexedDB.open(DB_NAME)
-
-      request.onerror = () => reject(request.error)
-
-      request.onsuccess = () => {
-        this.db = request.result
-        resolve()
+  private async openDatabase(): Promise<void> {
+    // 这些索引只是性能优化，没有很强的 schema 迁移理由，去掉了强制指定 version。
+    // bump 后用户回退版本会因 VersionError 打不开 session meta DB，导致降级使用失败：
+    // `The requested version (X) is less than the existing version (Y)` —— 例如 1.22 → 1.21 降级后无法发消息。
+    // 如确需引入 version/schema 变更：只做加法式变更（新 store/索引，keyPath 不变），
+    // 并捕获 VersionError 后以不带 version 的 `indexedDB.open(DB_NAME)` 重试，让旧版本客户端仍能打开新 schema。
+    //
+    // openDatabaseWithRecovery additionally handles the Chromium
+    // `UnknownError: Internal error.` backing-store corruption by deleting
+    // and recreating the database so the app stays usable.
+    this.db = await openDatabaseWithRecovery(DB_NAME, (db, request) => {
+      const store = db.objectStoreNames.contains(STORE_NAME)
+        ? request.transaction?.objectStore(STORE_NAME)
+        : db.createObjectStore(STORE_NAME, { keyPath: 'id' })
+      if (!store) {
+        return
       }
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result
-        const store = db.objectStoreNames.contains(STORE_NAME)
-          ? request.transaction?.objectStore(STORE_NAME)
-          : db.createObjectStore(STORE_NAME, { keyPath: 'id' })
-        if (!store) {
-          return
-        }
-        if (!store.indexNames.contains('sortOrder')) {
-          store.createIndex('sortOrder', 'sortOrder', { unique: false })
-        }
-        if (!store.indexNames.contains('createdAt')) {
-          store.createIndex('createdAt', 'createdAt', { unique: false })
-        }
-        if (!store.indexNames.contains('starredSortOrder')) {
-          store.createIndex('starredSortOrder', ['starred', 'sortOrder'], { unique: false })
-        }
-        if (!store.indexNames.contains('archivedAt')) {
-          store.createIndex('archivedAt', 'archivedAt', { unique: false })
-        }
+      if (!store.indexNames.contains('sortOrder')) {
+        store.createIndex('sortOrder', 'sortOrder', { unique: false })
+      }
+      if (!store.indexNames.contains('createdAt')) {
+        store.createIndex('createdAt', 'createdAt', { unique: false })
+      }
+      if (!store.indexNames.contains('starredSortOrder')) {
+        store.createIndex('starredSortOrder', ['starred', 'sortOrder'], { unique: false })
+      }
+      if (!store.indexNames.contains('archivedAt')) {
+        store.createIndex('archivedAt', 'archivedAt', { unique: false })
       }
     })
   }
