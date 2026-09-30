@@ -16,7 +16,6 @@ import {
 import {
   isQwenImageModel,
   normalizeQwenImageSize,
-  QWEN_DEFAULT_IMAGE_SIZE,
   QWEN_IMAGE_SIZE_MAX,
   QWEN_IMAGE_SIZE_MIN,
 } from '@shared/providers/definitions/image-models'
@@ -66,6 +65,9 @@ import {
   HISTORY_IMAGE_MODEL_DISPLAY_NAMES,
   HISTORY_PANEL_WIDTH,
   MAX_REFERENCE_IMAGES,
+  QWEN_SIZE_CUSTOM,
+  QWEN_SIZE_PRESET_DEFAULT,
+  QWEN_SIZE_PRESETS,
 } from './-components/constants'
 import { EmptyState } from './-components/EmptyState'
 import { GeneratedImagesGallery } from './-components/GeneratedImagesGallery'
@@ -94,8 +96,12 @@ interface InputToolbarProps {
   selectedRatio: string
   ratioOptions: string[]
   isQwenModel: boolean
-  qwenSize: string
-  onQwenSizeChange: (size: string) => void
+  qwenSizePreset: string
+  qwenCustomWidth: string
+  qwenCustomHeight: string
+  onQwenSizePresetChange: (size: string) => void
+  onQwenCustomWidthChange: (width: string) => void
+  onQwenCustomHeightChange: (height: string) => void
   onModelDrawerOpen: () => void
   onRatioDrawerOpen: () => void
   onRatioSelect: (ratio: string) => void
@@ -111,8 +117,12 @@ function InputToolbar({
   selectedRatio,
   ratioOptions,
   isQwenModel,
-  qwenSize,
-  onQwenSizeChange,
+  qwenSizePreset,
+  qwenCustomWidth,
+  qwenCustomHeight,
+  onQwenSizePresetChange,
+  onQwenCustomWidthChange,
+  onQwenCustomHeightChange,
   onModelDrawerOpen,
   onRatioDrawerOpen,
   onRatioSelect,
@@ -121,6 +131,10 @@ function InputToolbar({
   onNewCreation,
 }: InputToolbarProps) {
   const { t } = useTranslation()
+
+  const isCustomQwenSize = qwenSizePreset === QWEN_SIZE_CUSTOM
+  const qwenSizePresetLabel = isCustomQwenSize ? t('Custom') : qwenSizePreset.replace('*', 'x')
+  const digitsOnly = (value: string) => value.replace(/\D/g, '')
 
   return (
     <Flex align="center" gap={0} className="shrink-0 w-full" justify="space-between">
@@ -154,14 +168,68 @@ function InputToolbar({
         {isQwenModel && (
           <Flex align="center" gap={4} className="px-2">
             <IconAspectRatio size={16} className="text-[var(--chatbox-tint-secondary)]" />
-            <TextInput
-              size="xs"
-              value={qwenSize}
-              onChange={(e) => onQwenSizeChange(e.currentTarget.value)}
-              placeholder={QWEN_DEFAULT_IMAGE_SIZE}
-              aria-label={t('Resolution')}
-              styles={{ input: { width: 104, height: 28, fontSize: 13 } }}
-            />
+            <Menu position="top" withinPortal shadow="md" radius="lg">
+              <Menu.Target>
+                <UnstyledButton
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors"
+                  aria-label={t('Resolution')}
+                >
+                  <Text size="sm" className="text-[var(--chatbox-tint-secondary)]">
+                    {qwenSizePresetLabel}
+                  </Text>
+                  <IconChevronRight size={14} className="text-[var(--chatbox-tint-tertiary)] rotate-90" />
+                </UnstyledButton>
+              </Menu.Target>
+              <Menu.Dropdown className="!rounded-lg" style={{ minWidth: 110 }}>
+                {QWEN_SIZE_PRESETS.map((size) => (
+                  <Menu.Item
+                    key={size}
+                    onClick={() => onQwenSizePresetChange(size)}
+                    className="!rounded-lg"
+                  >
+                    <Text size="sm" fw={500} ta="center">
+                      {size.replace('*', 'x')}
+                    </Text>
+                  </Menu.Item>
+                ))}
+                <Menu.Item onClick={() => onQwenSizePresetChange(QWEN_SIZE_CUSTOM)} className="!rounded-lg">
+                  <Text size="sm" fw={500} ta="center">
+                    {t('Custom')}
+                  </Text>
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+            <Flex align="center" gap={4}>
+              <TextInput
+                size="xs"
+                type="number"
+                inputMode="numeric"
+                min={QWEN_IMAGE_SIZE_MIN}
+                max={QWEN_IMAGE_SIZE_MAX}
+                value={qwenCustomWidth}
+                disabled={!isCustomQwenSize}
+                onChange={(e) => onQwenCustomWidthChange(digitsOnly(e.currentTarget.value))}
+                placeholder="W"
+                aria-label={`${t('Resolution')} W`}
+                styles={{ input: { width: 68, height: 28, fontSize: 13 } }}
+              />
+              <Text size="sm" className="text-[var(--chatbox-tint-tertiary)]">
+                x
+              </Text>
+              <TextInput
+                size="xs"
+                type="number"
+                inputMode="numeric"
+                min={QWEN_IMAGE_SIZE_MIN}
+                max={QWEN_IMAGE_SIZE_MAX}
+                value={qwenCustomHeight}
+                disabled={!isCustomQwenSize}
+                onChange={(e) => onQwenCustomHeightChange(digitsOnly(e.currentTarget.value))}
+                placeholder="H"
+                aria-label={`${t('Resolution')} H`}
+                styles={{ input: { width: 68, height: 28, fontSize: 13 } }}
+              />
+            </Flex>
           </Flex>
         )}
 
@@ -273,7 +341,9 @@ function ImageCreatorPage() {
   const [selectedProvider, setSelectedProvider] = useState<string>(ModelProviderEnum.ChatboxAI)
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [selectedRatio, setSelectedRatio] = useState<string>('auto')
-  const [qwenSize, setQwenSize] = useState<string>(QWEN_DEFAULT_IMAGE_SIZE)
+  const [qwenSizePreset, setQwenSizePreset] = useState<string>(QWEN_SIZE_PRESET_DEFAULT)
+  const [qwenCustomWidth, setQwenCustomWidth] = useState<string>('')
+  const [qwenCustomHeight, setQwenCustomHeight] = useState<string>('')
   const [showModelDrawer, setShowModelDrawer] = useState(false)
   const [showRatioDrawer, setShowRatioDrawer] = useState(false)
 
@@ -287,7 +357,9 @@ function ImageCreatorPage() {
     if (!isQwenImageModel(selectedModel)) {
       return selectedRatio
     }
-    const normalized = normalizeQwenImageSize(qwenSize)
+    const normalized = normalizeQwenImageSize(
+      qwenSizePreset === QWEN_SIZE_CUSTOM ? `${qwenCustomWidth}*${qwenCustomHeight}` : qwenSizePreset
+    )
     if (!normalized) {
       toastActions.add(
         t('Invalid resolution. Use W*H format, each side between {{min}} and {{max}}.', {
@@ -298,7 +370,7 @@ function ImageCreatorPage() {
       return null
     }
     return normalized
-  }, [selectedModel, selectedRatio, qwenSize, t])
+  }, [selectedModel, selectedRatio, qwenSizePreset, qwenCustomWidth, qwenCustomHeight, t])
 
   const currentGeneratingId = useCurrentGeneratingId()
   const currentRecordId = useCurrentRecordId()
@@ -537,6 +609,20 @@ function ImageCreatorPage() {
       setPrompt(record.prompt)
 
       setReferenceImages(record.referenceImages.map((key) => ({ storageKey: key, isTempUpload: false })))
+
+      // Reflect the record's resolution in the resolution control: prefer a
+      // preset; fall back to Custom filled with the record's size.
+      if (isQwenImageModel(record.model.modelId)) {
+        const normalized = normalizeQwenImageSize(record.aspectRatio)
+        if (normalized && (QWEN_SIZE_PRESETS as readonly string[]).includes(normalized)) {
+          setQwenSizePreset(normalized)
+        } else if (normalized) {
+          const [width, height] = normalized.split('*')
+          setQwenSizePreset(QWEN_SIZE_CUSTOM)
+          setQwenCustomWidth(width)
+          setQwenCustomHeight(height)
+        }
+      }
     },
     [cleanupTempUploads]
   )
@@ -769,8 +855,12 @@ function ImageCreatorPage() {
                     selectedRatio={selectedRatio}
                     ratioOptions={ratioOptions}
                     isQwenModel={isQwenModel}
-                    qwenSize={qwenSize}
-                    onQwenSizeChange={setQwenSize}
+                    qwenSizePreset={qwenSizePreset}
+                    qwenCustomWidth={qwenCustomWidth}
+                    qwenCustomHeight={qwenCustomHeight}
+                    onQwenSizePresetChange={setQwenSizePreset}
+                    onQwenCustomWidthChange={setQwenCustomWidth}
+                    onQwenCustomHeightChange={setQwenCustomHeight}
                     onModelDrawerOpen={() => setShowModelDrawer(true)}
                     onRatioDrawerOpen={() => setShowRatioDrawer(true)}
                     onRatioSelect={setSelectedRatio}

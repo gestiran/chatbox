@@ -4,6 +4,11 @@ export const HISTORY_PANEL_WIDTH = 170
 
 export { getRatioOptionsForModel } from '@shared/providers/definitions/image-models'
 
+// ===== Qwen resolution presets (stored in normalized "W*H" form) =====
+export const QWEN_SIZE_PRESETS = ['512*512', '768*768', '1024*1024', '1536*1536', '2048*2048'] as const
+export const QWEN_SIZE_PRESET_DEFAULT = '1024*1024'
+export const QWEN_SIZE_CUSTOM = 'custom'
+
 // Display-only fallback for old generation records. Do not use this for selectable image models.
 export const HISTORY_IMAGE_MODEL_DISPLAY_NAMES: Record<string, string> = {
   '': 'GPT Image',
