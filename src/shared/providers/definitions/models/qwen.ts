@@ -10,6 +10,16 @@ const MULTIMODAL_GENERATION_PATH = '/services/aigc/multimodal-generation/generat
 /** Separator between positive and negative prompt in user input (newline + "***" + newline). */
 const NEGATIVE_PROMPT_SEPARATOR = '\n***\n'
 
+/**
+ * Number of images sent in an image editing request.
+ *
+ * The Qwen image editing API accepts up to three input images per request
+ * (see https://docs.qwencloud.com, Image editing). For now only the single
+ * last image of the chat (the one being edited) is sent; the remaining two
+ * slots are reserved for user-provided reference images (not wired up yet).
+ */
+export const QWEN_EDITING_IMAGE_COUNT = 1
+
 /** Generation can legitimately take about a minute; downloads should be quick. */
 const GENERATION_TIMEOUT_MS = 5 * 60 * 1000
 const DOWNLOAD_TIMEOUT_MS = 30 * 1000
@@ -142,9 +152,22 @@ export default class Qwen extends OpenAICompatible {
       throw new ApiError('Prompt is required for image generation')
     }
 
+    // Input images (public URLs or base64 data URLs). When at least one image
+    // is present, the request becomes an "image editing" call: the model edits
+    // the provided images according to the text instruction. Without images it
+    // stays a plain "text to image" generation.
+    //
+    // Only the last image (the most recent one of the chat, appended last by
+    // the caller) is sent; the other two API slots are reserved for future
+    // user-provided reference images.
+    const inputImages = (params.images ?? [])
+      .map((image) => image.imageUrl)
+      .filter((url): url is string => typeof url === 'string' && url.length > 0)
+      .slice(-QWEN_EDITING_IMAGE_COUNT)
+
     const results: string[] = []
     for (let i = 0; i < params.num; i++) {
-      const imageUrls = await this.requestImageGeneration(positive, negative, size, signal)
+      const imageUrls = await this.requestImageGeneration(positive, negative, size, inputImages, signal)
       for (const url of imageUrls) {
         const dataUrl = await this.downloadImageAsDataUrl(url, signal)
         results.push(dataUrl)
@@ -158,11 +181,21 @@ export default class Qwen extends OpenAICompatible {
     positivePrompt: string,
     negativePrompt: string,
     size: string,
+    inputImages: string[],
     signal?: AbortSignal
   ): Promise<string[]> {
     const apiHost = (this.options.imageApiHost || QWEN_IMAGE_API_HOST).replace(/\/+$/, '')
     const requestUrl = `${apiHost}${MULTIMODAL_GENERATION_PATH}`
-    console.debug('[qwen-image] requesting generation:', requestUrl, 'size:', size)
+    console.debug(
+      '[qwen-image] requesting generation:',
+      requestUrl,
+      'size:',
+      size,
+      'mode:',
+      inputImages.length > 0 ? 'image-editing' : 'text-to-image',
+      'input images:',
+      inputImages.length
+    )
 
     const res = await runWithTimeout('Qwen image generation request', GENERATION_TIMEOUT_MS, signal, (s) =>
       this.dependencies.request.apiRequest({
@@ -178,7 +211,9 @@ export default class Qwen extends OpenAICompatible {
             messages: [
               {
                 role: 'user',
-                content: [{ text: positivePrompt }],
+                // Image editing format: image parts come first (Image 1..3),
+                // followed by the single text instruction.
+                content: [...inputImages.map((image) => ({ image })), { text: positivePrompt }],
               },
             ],
           },

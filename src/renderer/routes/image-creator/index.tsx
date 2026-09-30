@@ -429,14 +429,34 @@ function ImageCreatorPage() {
     if (aspectRatio === null) return
 
     try {
+      // Sequential "Image editing" mode: when the open record already has
+      // generated images, the next request in this chat edits the last one.
+      // The last generated image is appended to the reference images (and the
+      // current record becomes a parent), so the provider receives
+      // [image, text] instead of [text] only.
+      const lastGeneratedImage =
+        currentRecord && currentRecord.generatedImages.length > 0
+          ? currentRecord.generatedImages[currentRecord.generatedImages.length - 1]
+          : undefined
+
       // Collect all unique source record IDs from reference images (DAG support)
       const parentIds = [
-        ...new Set(referenceImages.map((img) => img.sourceRecordId).filter((id): id is string => !!id)),
+        ...new Set(
+          [
+            ...referenceImages.map((img) => img.sourceRecordId).filter((id): id is string => !!id),
+            ...(lastGeneratedImage && currentRecord ? [currentRecord.id] : []),
+          ].filter((id): id is string => !!id)
+        ),
       ]
+
+      const referenceImageKeys = referenceImages.map((img) => img.storageKey)
+      if (lastGeneratedImage && !referenceImageKeys.includes(lastGeneratedImage)) {
+        referenceImageKeys.push(lastGeneratedImage)
+      }
 
       await createAndGenerate({
         prompt: prompt.trim(),
-        referenceImages: referenceImages.map((img) => img.storageKey),
+        referenceImages: referenceImageKeys,
         model: {
           provider: selectedProvider,
           modelId: selectedModel,
@@ -453,7 +473,7 @@ function ImageCreatorPage() {
     } catch (error) {
       log.error('Failed to generate image:', error)
     }
-  }, [prompt, referenceImages, selectedProvider, selectedModel, isCurrentlyGenerating, resolveAspectRatio, t])
+  }, [prompt, referenceImages, currentRecord, selectedProvider, selectedModel, isCurrentlyGenerating, resolveAspectRatio, t])
 
   const handleQuickPromptSubmit = useCallback(
     async (quickPrompt: string) => {
