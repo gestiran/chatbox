@@ -38,7 +38,13 @@ export interface UnavailableMcpServer {
  * list, while the process itself stays available to every chat.
  */
 export function startMcpServerProcess(id: string): void {
-  if (mcpController.getServer(id)) {
+  const running = mcpController.getServer(id)
+  if (running) {
+    // Already managed: review the connection instead of assuming it is usable,
+    // so re-enabling a server in one chat also revives it after a crash.
+    running.ensureReady().catch((error) => {
+      console.warn('mcp: failed to review server for chat:', id, error)
+    })
     return
   }
   const globalMcp = readGlobalMcpSettings()
@@ -62,10 +68,14 @@ function resolveMcpServerConfig(id: string): MCPServerConfig | null {
  * Called right before message generation: makes sure every MCP server active
  * in this chat is reachable.
  *
- * - Servers never started here are started and awaited (instead of the usual
- *   fire-and-forget) so the outcome is known before the request goes out.
- * - Servers registered in the controller but not running (a previous start
- *   failed, or the process died) are reconnected exactly once.
+ * - Servers unknown to the controller are started and awaited (instead of the
+ *   usual fire-and-forget) so the outcome is known before the request goes out.
+ * - Servers already registered are reviewed through `ensureReady()`: it joins a
+ *   start another chat has in flight, probes a connection that still looks
+ *   healthy (a stdio process can die without that being noticed) and
+ *   reconnects with a bounded number of retries when it is missing or dead.
+ *   Nothing here waits indefinitely: every step is time-boxed, and concurrent
+ *   chats share one attempt per server instead of each spawning their own.
  *
  * Returns the servers that remained unavailable after the reconnect attempt so
  * the caller can abort the request with an actionable error.
@@ -77,7 +87,11 @@ export async function ensureSessionMcpServersAvailable(
   const results = await Promise.all(
     allowList.map(async (id): Promise<UnavailableMcpServer | null> => {
       let instance = mcpController.getServer(id)
-      if (!instance) {
+      if (instance) {
+        await instance.ensureReady().catch((error) => {
+          console.warn('mcp: reconnect failed for server:', id, error)
+        })
+      } else {
         const config = resolveMcpServerConfig(id)
         if (!config) {
           return null
@@ -88,11 +102,6 @@ export async function ensureSessionMcpServersAvailable(
           console.warn('mcp: failed to start server for chat:', id, error)
         })
         instance = mcpController.getServer(id)
-      } else if (instance.status.state !== 'running') {
-        // Registered but not usable: drop the stale client and reconnect once.
-        await instance.reconnect().catch((error) => {
-          console.warn('mcp: reconnect failed for server:', id, error)
-        })
       }
       if (instance?.status.state !== 'running') {
         const config = resolveMcpServerConfig(id)

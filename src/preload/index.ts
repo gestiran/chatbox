@@ -37,9 +37,14 @@ const electronHandler: ElectronIPC = {
     return () => ipcRenderer.off('update-downloaded', callback)
   },
   addMcpStdioTransportEventListener: (transportId: string, event: string, callback?: (...args: any[]) => void) => {
-    ipcRenderer.on(`mcp:stdio-transport:${transportId}:${event}`, (_event, ...args) => {
+    const channel = `mcp:stdio-transport:${transportId}:${event}`
+    const handler = (_event: Electron.IpcRendererEvent, ...args: any[]) => {
       callback?.(...args)
-    })
+    }
+    ipcRenderer.on(channel, handler)
+    // Returned so the renderer can release the listener when the transport is
+    // closed; every reconnect registers new ones for a new transport id.
+    return () => ipcRenderer.removeListener(channel, handler)
   },
   onNavigate: (callback: (path: string) => void) => {
     const listener = (_event: unknown, path: string) => {

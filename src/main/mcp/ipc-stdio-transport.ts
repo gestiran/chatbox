@@ -23,6 +23,9 @@ async function enhanceEnv(configEnv?: Record<string, string>) {
 
 const logger = getLogger('mcp:stdio-transport')
 
+/** Tail of the server's stderr kept to explain why the connection ended. */
+const MAX_STDERR_LENGTH = 4000
+
 const transportMap = new Map<string, StdioClientTransport>()
 
 function getTransport(transportId: string) {
@@ -58,6 +61,11 @@ ipcMain.handle('mcp:stdio-transport:create', async (event, serverParams: StdioSe
     const text = iconv.decode(data, encoding || 'utf-8')
     logger.debug('mcp stderr', text)
     stderrMessage += text
+    // Keep only the tail: this is reported as the disconnect reason, and a
+    // chatty server must not grow it (and the renderer status) without limit.
+    if (stderrMessage.length > MAX_STDERR_LENGTH) {
+      stderrMessage = stderrMessage.slice(-MAX_STDERR_LENGTH)
+    }
   })
 
   const transportId = uuidv4()
@@ -93,9 +101,16 @@ ipcMain.handle('mcp:stdio-transport:send', async (_event, transportId: string, m
 
 ipcMain.handle('mcp:stdio-transport:close', async (_event, transportId: string) => {
   logger.info('close', transportId)
-  const transport = getTransport(transportId)
-  await transport.close()
+  // Closing is idempotent: the handle is already removed once the child exited
+  // on its own (onclose), and the renderer retries the teardown when a connect
+  // attempt is abandoned. Neither should surface as an error.
+  const transport = transportMap.get(transportId)
   transportMap.delete(transportId)
+  if (!transport) {
+    logger.info('close: transport already gone', transportId)
+    return
+  }
+  await transport.close()
 })
 
 export function closeAllTransports() {

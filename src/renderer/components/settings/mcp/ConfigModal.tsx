@@ -74,9 +74,9 @@ const ConfigForm: FC<{
     setTesting(true)
     setTestingResult(null)
     trackEvent('test_mcp_server_connection', { type: config.transport.type })
+    const server = new MCPServer(config.transport)
+    testingAbortController.current = new AbortController()
     try {
-      const server = new MCPServer(config.transport)
-      testingAbortController.current = new AbortController()
       await pTimeout(server.start(), {
         milliseconds: 5 * 60_000,
         signal: testingAbortController.current.signal,
@@ -89,13 +89,16 @@ const ConfigForm: FC<{
         config,
         tools: Object.keys(tools).map((name) => ({ name, description: tools[name].description })),
       })
-      await server.stop()
     } catch (err) {
       if (testingAbortController.current?.signal.aborted) {
         return
       }
       setTestingResult({ config, error: err as Error, tools: [] })
     } finally {
+      // Always release what the test started. Cancelling only stops pTimeout
+      // from waiting: start() keeps running in the background and would
+      // otherwise leave the server process alive after the modal is closed.
+      await server.stop()
       setTesting(false)
     }
   }

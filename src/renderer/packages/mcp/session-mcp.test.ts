@@ -38,6 +38,8 @@ function makeInstance(state: string, error?: string) {
   return {
     status: { state, ...(error ? { error } : {}) },
     reconnect: vi.fn(async () => {}),
+    ensureReady: vi.fn(async () => {}),
+    reportToolCallFailure: vi.fn(),
   }
 }
 
@@ -72,18 +74,19 @@ describe('ensureSessionMcpServersAvailable', () => {
     mcpControllerMock.servers.set('srv-1', { instance: running, config: {} })
 
     await expect(ensureSessionMcpServersAvailable()).resolves.toEqual([])
-    expect(running.reconnect).not.toHaveBeenCalled()
+    // The connection is reviewed on every user message, even when it looks healthy.
+    expect(running.ensureReady).toHaveBeenCalledTimes(1)
     expect(mcpControllerMock.startServer).not.toHaveBeenCalled()
   })
 
-  it('reconnects a registered-but-unavailable server once and reports it when still down', async () => {
+  it('reviews a registered-but-unavailable server once and reports it when still down', async () => {
     const broken = makeInstance('idle', 'spawn ENOENT')
     mcpControllerMock.servers.set('srv-1', { instance: broken, config: {} })
 
     await expect(ensureSessionMcpServersAvailable()).resolves.toEqual([
       { id: 'srv-1', name: 'My Server', reason: 'spawn ENOENT' },
     ])
-    expect(broken.reconnect).toHaveBeenCalledTimes(1)
+    expect(broken.ensureReady).toHaveBeenCalledTimes(1)
     expect(mcpControllerMock.startServer).not.toHaveBeenCalled()
   })
 
@@ -97,6 +100,9 @@ describe('ensureSessionMcpServersAvailable', () => {
     expect(mcpControllerMock.startServer).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'srv-1', enabled: true })
     )
+    // A freshly started server is not probed again: start() already fetched its tools.
+    const started = mcpControllerMock.servers.get('srv-1')?.instance as ReturnType<typeof makeInstance>
+    expect(started.ensureReady).not.toHaveBeenCalled()
   })
 
   it('reports a freshly started server that failed to reach the running state', async () => {
