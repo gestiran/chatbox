@@ -1,6 +1,6 @@
 import { ModelProviderEnum, ModelProviderType } from '../../types'
 import { defineProvider } from '../registry'
-import Qwen from './models/qwen'
+import Qwen, { QWEN_IMAGE_API_HOST } from './models/qwen'
 
 const QWEN_API_HOST = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
@@ -16,6 +16,7 @@ export const qwenProvider = defineProvider({
   },
   defaultSettings: {
     apiHost: QWEN_API_HOST,
+    imageApiHost: QWEN_IMAGE_API_HOST,
     models: [
       {
         modelId: 'qwen3.7-max',
@@ -37,6 +38,10 @@ export const qwenProvider = defineProvider({
         modelId: 'qwen3-vl-plus',
         capabilities: ['vision', 'tool_use'],
       },
+      {
+        modelId: 'qwen-image-3.0-pro',
+        type: 'image',
+      },
     ],
   },
   createModel: (config) => {
@@ -45,6 +50,7 @@ export const qwenProvider = defineProvider({
         name: 'Qwen',
         apiKey: config.effectiveApiKey,
         apiHost: config.formattedApiHost || QWEN_API_HOST,
+        imageApiHost: config.providerSetting.imageApiHost || QWEN_IMAGE_API_HOST,
         model: config.model,
         temperature: config.settings.temperature,
         topP: config.settings.topP,

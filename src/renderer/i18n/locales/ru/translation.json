@@ -1378,5 +1378,9 @@
   "Task completed": "Задача завершена",
   "Task failed": "Задача прервана",
   "Read last request": "Прочитать последний запрос",
-  "Project": "Проект"
+  "Project": "Проект",
+  "Image Generation API Host": "URL API генерации изображений",
+  "Used by Qwen image generation models in Image Creator.": "Используется моделями генерации изображений Qwen в Image Creator.",
+  "Resolution": "Разрешение",
+  "Invalid resolution. Use W*H format, each side between {{min}} and {{max}}.": "Неверное разрешение. Используйте формат Ш*В, каждая сторона от {{min}} до {{max}}."
 }

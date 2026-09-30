@@ -728,6 +728,34 @@ function ProviderSettings({ providerId }: { providerId: string }) {
           </Stack>
         )}
 
+        {/* Qwen Image Generation API Host */}
+        {baseInfo.id === ModelProviderEnum.Qwen && (
+          <Stack gap="xxs">
+            <Text span fw="600">
+              {t('Image Generation API Host')}
+            </Text>
+            <Flex gap="xs" align="center">
+              <TextInput
+                flex={1}
+                value={providerSettings?.imageApiHost || ''}
+                placeholder={baseInfo.defaultSettings?.imageApiHost}
+                onChange={(e) =>
+                  setProviderSettings({
+                    imageApiHost: e.currentTarget.value,
+                  })
+                }
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </Flex>
+            <Text span size="xs" flex="0 1 auto" c="chatbox-secondary">
+              {t('Used by Qwen image generation models in Image Creator.')}
+            </Text>
+          </Stack>
+        )}
+
         {baseInfo.isCustom && (
           <>
             {/* custom provider api host & path */}

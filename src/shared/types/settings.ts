@@ -76,6 +76,8 @@ export const ProviderSettingsSchema = z.object({
   apiKey: z.string().optional().catch(undefined),
   apiHost: z.string().optional().catch(undefined),
   apiPath: z.string().optional().catch(undefined),
+  /** Separate base URL for image generation services (e.g. Qwen DashScope image API) */
+  imageApiHost: z.string().optional().catch(undefined),
   models: z.array(ProviderModelInfoSchema).optional().catch(undefined),
   excludedModels: z.array(z.string()).optional().catch(undefined),
   useProxy: z.boolean().optional().catch(undefined),

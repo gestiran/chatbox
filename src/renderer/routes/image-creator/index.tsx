@@ -10,8 +10,16 @@ import {
   Stack,
   Text,
   Textarea,
+  TextInput,
   UnstyledButton,
 } from '@mantine/core'
+import {
+  isQwenImageModel,
+  normalizeQwenImageSize,
+  QWEN_DEFAULT_IMAGE_SIZE,
+  QWEN_IMAGE_SIZE_MAX,
+  QWEN_IMAGE_SIZE_MIN,
+} from '@shared/providers/definitions/image-models'
 import type { ImageGeneration, ImageGenerationModel } from '@shared/types'
 import { ModelProviderEnum } from '@shared/types'
 import {
@@ -85,6 +93,9 @@ interface InputToolbarProps {
   modelDisplayName: string
   selectedRatio: string
   ratioOptions: string[]
+  isQwenModel: boolean
+  qwenSize: string
+  onQwenSizeChange: (size: string) => void
   onModelDrawerOpen: () => void
   onRatioDrawerOpen: () => void
   onRatioSelect: (ratio: string) => void
@@ -99,6 +110,9 @@ function InputToolbar({
   modelDisplayName,
   selectedRatio,
   ratioOptions,
+  isQwenModel,
+  qwenSize,
+  onQwenSizeChange,
   onModelDrawerOpen,
   onRatioDrawerOpen,
   onRatioSelect,
@@ -136,8 +150,23 @@ function InputToolbar({
           </ImageModelSelect>
         )}
 
+        {/* Resolution Input (Qwen image models) */}
+        {isQwenModel && (
+          <Flex align="center" gap={4} className="px-2">
+            <IconAspectRatio size={16} className="text-[var(--chatbox-tint-secondary)]" />
+            <TextInput
+              size="xs"
+              value={qwenSize}
+              onChange={(e) => onQwenSizeChange(e.currentTarget.value)}
+              placeholder={QWEN_DEFAULT_IMAGE_SIZE}
+              aria-label={t('Resolution')}
+              styles={{ input: { width: 104, height: 28, fontSize: 13 } }}
+            />
+          </Flex>
+        )}
+
         {/* Ratio Select */}
-        {isSmallScreen ? (
+        {!isQwenModel && isSmallScreen ? (
           <UnstyledButton
             onClick={onRatioDrawerOpen}
             className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors"
@@ -148,7 +177,7 @@ function InputToolbar({
             </Text>
             <IconChevronRight size={14} className="text-[var(--chatbox-tint-tertiary)] rotate-90" />
           </UnstyledButton>
-        ) : (
+        ) : !isQwenModel ? (
           <Menu position="top" withinPortal shadow="md" radius="lg">
             <Menu.Target>
               <UnstyledButton className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors">
@@ -169,7 +198,7 @@ function InputToolbar({
               ))}
             </Menu.Dropdown>
           </Menu>
-        )}
+        ) : null}
 
         {/* Reference Image Button */}
         <UnstyledButton
@@ -244,11 +273,32 @@ function ImageCreatorPage() {
   const [selectedProvider, setSelectedProvider] = useState<string>(ModelProviderEnum.ChatboxAI)
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [selectedRatio, setSelectedRatio] = useState<string>('auto')
+  const [qwenSize, setQwenSize] = useState<string>(QWEN_DEFAULT_IMAGE_SIZE)
   const [showModelDrawer, setShowModelDrawer] = useState(false)
   const [showRatioDrawer, setShowRatioDrawer] = useState(false)
 
   // Get ratio options based on selected model
   const ratioOptions = getRatioOptionsForModel(selectedModel)
+  const isQwenModel = isQwenImageModel(selectedModel)
+
+  // Resolves the aspectRatio value passed to the model:
+  // for Qwen image models it carries the requested resolution ("W*H").
+  const resolveAspectRatio = useCallback((): string | undefined | null => {
+    if (!isQwenImageModel(selectedModel)) {
+      return selectedRatio
+    }
+    const normalized = normalizeQwenImageSize(qwenSize)
+    if (!normalized) {
+      toastActions.add(
+        t('Invalid resolution. Use W*H format, each side between {{min}} and {{max}}.', {
+          min: QWEN_IMAGE_SIZE_MIN,
+          max: QWEN_IMAGE_SIZE_MAX,
+        })
+      )
+      return null
+    }
+    return normalized
+  }, [selectedModel, selectedRatio, qwenSize, t])
 
   const currentGeneratingId = useCurrentGeneratingId()
   const currentRecordId = useCurrentRecordId()
@@ -375,6 +425,9 @@ function ImageCreatorPage() {
       return
     }
 
+    const aspectRatio = resolveAspectRatio()
+    if (aspectRatio === null) return
+
     try {
       // Collect all unique source record IDs from reference images (DAG support)
       const parentIds = [
@@ -389,7 +442,7 @@ function ImageCreatorPage() {
           modelId: selectedModel,
         },
         imageGenerateNum: 1,
-        aspectRatio: selectedRatio,
+        aspectRatio,
         parentIds: parentIds.length > 0 ? parentIds : undefined,
       })
 
@@ -400,7 +453,7 @@ function ImageCreatorPage() {
     } catch (error) {
       log.error('Failed to generate image:', error)
     }
-  }, [prompt, referenceImages, selectedProvider, selectedModel, selectedRatio, isCurrentlyGenerating, t])
+  }, [prompt, referenceImages, selectedProvider, selectedModel, isCurrentlyGenerating, resolveAspectRatio, t])
 
   const handleQuickPromptSubmit = useCallback(
     async (quickPrompt: string) => {
@@ -415,6 +468,9 @@ function ImageCreatorPage() {
         return
       }
 
+      const aspectRatio = resolveAspectRatio()
+      if (aspectRatio === null) return
+
       try {
         await createAndGenerate({
           prompt: quickPrompt,
@@ -424,13 +480,13 @@ function ImageCreatorPage() {
             modelId: selectedModel,
           },
           imageGenerateNum: 1,
-          aspectRatio: 'auto',
+          aspectRatio: isQwenImageModel(selectedModel) ? aspectRatio : 'auto',
         })
       } catch (error) {
         log.error('Failed to generate image:', error)
       }
     },
-    [selectedProvider, selectedModel, isCurrentlyGenerating, t]
+    [selectedProvider, selectedModel, isCurrentlyGenerating, resolveAspectRatio, t]
   )
 
   const handleUseAsReference = useCallback((storageKey: string, sourceRecordId?: string) => {
@@ -566,7 +622,8 @@ function ImageCreatorPage() {
 
               {currentRecord && (
                 <Stack gap="lg" className="animate-in fade-in duration-300">
-                  {currentRecord.status === 'generating' && currentRecord.generatedImages.length === 0 && (
+                  {(currentRecord.status === 'generating' || currentRecord.status === 'pending') &&
+                    currentRecord.generatedImages.length === 0 && (
                     <LoadingShimmer />
                   )}
 
@@ -691,6 +748,9 @@ function ImageCreatorPage() {
                     modelDisplayName={modelDisplayName}
                     selectedRatio={selectedRatio}
                     ratioOptions={ratioOptions}
+                    isQwenModel={isQwenModel}
+                    qwenSize={qwenSize}
+                    onQwenSizeChange={setQwenSize}
                     onModelDrawerOpen={() => setShowModelDrawer(true)}
                     onRatioDrawerOpen={() => setShowRatioDrawer(true)}
                     onRatioSelect={setSelectedRatio}

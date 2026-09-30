@@ -40,7 +40,12 @@ async function retryRequest<T>(fn: () => Promise<T>, retry: number, url: string)
 
 function buildHeaders(options: RequestOptions, url: string): Headers {
   const headers = new Headers(options.headers)
-  headers.set('Content-Type', 'application/json')
+  // Only requests carrying a body need a JSON content type. Setting it on a GET
+  // breaks pre-signed URLs (e.g. Aliyun OSS includes Content-Type in the signature)
+  // and makes such downloads fail with 403.
+  if (options.method !== 'GET' && options.method !== 'HEAD') {
+    headers.set('Content-Type', 'application/json')
+  }
 
   if (options.useProxy && !isLocalHost(url) && platform.type !== 'mobile') {
     headers.set('CHATBOX-TARGET-URI', url)

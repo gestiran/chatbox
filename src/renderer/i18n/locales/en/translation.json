@@ -1378,5 +1378,9 @@
   "Task completed": "Task completed",
   "Task failed": "Task failed",
   "Read last request": "Read last request",
-  "Project": "Project"
+  "Project": "Project",
+  "Image Generation API Host": "Image Generation API Host",
+  "Used by Qwen image generation models in Image Creator.": "Used by Qwen image generation models in Image Creator.",
+  "Resolution": "Resolution",
+  "Invalid resolution. Use W*H format, each side between {{min}} and {{max}}.": "Invalid resolution. Use W*H format, each side between {{min}} and {{max}}."
 }

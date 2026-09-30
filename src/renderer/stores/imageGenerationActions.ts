@@ -343,6 +343,8 @@ async function generateImagesDirect(recordId: string, params: GenerateImageParam
       path: 'direct',
     })
 
+    log.info('Direct image generation started:', recordId, params.model.provider, params.model.modelId)
+
     // Call model.paint() with progressive callback
     const resultDataUrls = await model.paint(
       {

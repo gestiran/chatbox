@@ -1,4 +1,5 @@
 import { isUsingOAuth, mergeSharedOAuthProviderSettings } from '@shared/oauth'
+import { getProviderDefinition } from '@shared/providers'
 import { ModelProviderEnum, ModelProviderType, type ProviderModelInfo, type Settings } from '@shared/types'
 import { getLogger } from '@/lib/utils'
 import { getModelManifest, type RemoteModelInfo } from '@/packages/remote'
@@ -79,6 +80,20 @@ function manualImageModels(settings: Settings, provider: string): ImageModelOpti
     .map(manualImageModelToOption)
 }
 
+function manualImageModelsWithDefaults(settings: Settings, provider: string): ImageModelOption[] {
+  const savedModels = settings.providers?.[provider]?.models ?? []
+  const defaultImageModels = (getProviderDefinition(provider)?.defaultSettings?.models ?? []).filter(
+    (model) => model.type === 'image'
+  )
+  const merged = [...savedModels]
+  for (const model of defaultImageModels) {
+    if (!merged.some((m) => m.modelId === model.modelId)) {
+      merged.push(model)
+    }
+  }
+  return merged.filter((model) => model.type === 'image').map(manualImageModelToOption)
+}
+
 async function loadRemoteModels(provider: ModelProviderEnum, settings: Settings): Promise<ImageModelOption[]> {
   try {
     return await loadProviderImageModels(provider, {
@@ -151,6 +166,12 @@ export async function getAvailableImageModels(
         ModelProviderEnum.OpenAI,
         mergeImageModels(remoteModels, manualImageModels(settings, ModelProviderEnum.OpenAI))
       )
+    )
+  }
+
+  if (isBuiltinProviderConfigured(ModelProviderEnum.Qwen, settings)) {
+    catalog.push(
+      ...catalogEntries(ModelProviderEnum.Qwen, manualImageModelsWithDefaults(settings, ModelProviderEnum.Qwen))
     )
   }
 

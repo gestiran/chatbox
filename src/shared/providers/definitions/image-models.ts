@@ -19,3 +19,35 @@ export function isGeminiImageModel(modelId: string): boolean {
 export function getRatioOptionsForModel(modelId: string): string[] {
   return RATIO_OPTIONS[getImageModelFamily(modelId)] ?? RATIO_OPTIONS.default
 }
+
+// ===== Qwen image generation =====
+
+export const QWEN_IMAGE_SIZE_MIN = 512
+export const QWEN_IMAGE_SIZE_MAX = 2048
+export const QWEN_DEFAULT_IMAGE_SIZE = '2048*2048'
+
+export function isQwenImageModel(modelId: string): boolean {
+  return modelId.startsWith('qwen-image')
+}
+
+/**
+ * Validates and normalizes a Qwen image size like "1024*1024" (also accepts "x"/"×" separators).
+ * Each side must be within [QWEN_IMAGE_SIZE_MIN, QWEN_IMAGE_SIZE_MAX].
+ * Returns the normalized "W*H" string, or null when the input is invalid.
+ */
+export function normalizeQwenImageSize(size?: string | null): string | null {
+  if (!size) return null
+  const match = /^\s*(\d+)\s*[*x×]\s*(\d+)\s*$/i.exec(size)
+  if (!match) return null
+  const width = Number(match[1])
+  const height = Number(match[2])
+  if (
+    width < QWEN_IMAGE_SIZE_MIN ||
+    width > QWEN_IMAGE_SIZE_MAX ||
+    height < QWEN_IMAGE_SIZE_MIN ||
+    height > QWEN_IMAGE_SIZE_MAX
+  ) {
+    return null
+  }
+  return `${width}*${height}`
+}

@@ -50,6 +50,7 @@ export function useImageModelGroups(): ImageModelGroup[] {
   const chatboxProvider = providers.find((p) => p.id === ModelProviderEnum.ChatboxAI)
   const openAIProvider = providers.find((p) => p.id === ModelProviderEnum.OpenAI)
   const geminiProvider = providers.find((p) => p.id === ModelProviderEnum.Gemini)
+  const qwenProvider = providers.find((p) => p.id === ModelProviderEnum.Qwen)
   const customGeminiProviders = providers.filter((p) => p.isCustom && p.type === ModelProviderType.Gemini)
 
   const openAIImageModels = useProviderImageModels(ModelProviderEnum.OpenAI, !!openAIProvider)
@@ -101,6 +102,27 @@ export function useImageModelGroups(): ImageModelGroup[] {
       }
     }
 
+    if (qwenProvider) {
+      // Merge saved models with default image models so that users with an
+      // already-persisted Qwen model list still see the built-in image model.
+      const savedModels = providerSettingsMap?.[qwenProvider.id]?.models || []
+      const defaultImageModels = (qwenProvider.defaultSettings?.models || []).filter((model) => model.type === 'image')
+      const mergedModels = [...savedModels]
+      for (const model of defaultImageModels) {
+        if (!mergedModels.some((m) => m.modelId === model.modelId)) {
+          mergedModels.push(model)
+        }
+      }
+      const models = mergedModels.filter((model) => model.type === 'image').map(manualImageModelToOption)
+      if (models.length > 0) {
+        groups.push({
+          label: qwenProvider.name,
+          providerId: qwenProvider.id,
+          models,
+        })
+      }
+    }
+
     if (openAIProvider && isOpenAIImageGenerationAuthSupported(providerSettingsMap)) {
       const manualModels = (providerSettingsMap?.[openAIProvider.id]?.models || [])
         .filter((model) => model.type === 'image')
@@ -120,6 +142,7 @@ export function useImageModelGroups(): ImageModelGroup[] {
     chatboxProvider,
     openAIProvider,
     geminiProvider,
+    qwenProvider,
     customGeminiProviders,
     providerSettingsMap,
     chatboxAIImageModels,
