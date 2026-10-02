@@ -16,6 +16,7 @@ import {
   Text,
 } from '@mantine/core'
 import {
+  KNOWLEDGE_BASE_MAX_DIRECTORY_SCAN_FILES,
   KNOWLEDGE_BASE_MAX_FILE_SIZE,
   KNOWLEDGE_BASE_MAX_FILE_SIZE_LABEL,
   KNOWLEDGE_BASE_MAX_PARSED_CONTENT_SIZE_LABEL,
@@ -69,6 +70,36 @@ interface KnowledgeBaseDocumentsProps {
 interface RejectedFile {
   name: string
   size: number
+}
+
+/** Extension -> MIME mapping used when the OS/browser does not provide a MIME type. */
+const MIME_TYPE_BY_EXTENSION: [string, string][] = [
+  ['.md', 'text/markdown'],
+  ['.markdown', 'text/markdown'],
+  ['.txt', 'text/plain'],
+  ['.pdf', 'application/pdf'],
+  ['.doc', 'application/msword'],
+  ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  ['.rtf', 'application/rtf'],
+  ['.csv', 'text/csv'],
+  ['.epub', 'application/epub+zip'],
+  ['.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  ['.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.png', 'image/png'],
+  ['.gif', 'image/gif'],
+  ['.webp', 'image/webp'],
+  ['.bmp', 'image/bmp'],
+]
+
+/** Infer MIME type from a filename extension; unknown text-like files fall back to text/plain. */
+const inferMimeTypeFromFilename = (filename: string): string => {
+  const lower = filename.toLowerCase()
+  for (const [ext, mime] of MIME_TYPE_BY_EXTENSION) {
+    if (lower.endsWith(ext)) return mime
+  }
+  return 'text/plain'
 }
 
 const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
@@ -141,43 +172,8 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
 
   // MIME type correction for Windows compatibility
   const correctMimeType = useCallback((file: File): FileMeta => {
-    const filename = file.name.toLowerCase()
-    let mimeType = file.type
-
     // If MIME type is empty or incorrect, infer from file extension
-    if (!mimeType || mimeType === '') {
-      if (filename.endsWith('.md') || filename.endsWith('.markdown')) {
-        mimeType = 'text/markdown'
-      } else if (filename.endsWith('.txt')) {
-        mimeType = 'text/plain'
-      } else if (filename.endsWith('.pdf')) {
-        mimeType = 'application/pdf'
-      } else if (filename.endsWith('.doc')) {
-        mimeType = 'application/msword'
-      } else if (filename.endsWith('.docx')) {
-        mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      } else if (filename.endsWith('.rtf')) {
-        mimeType = 'application/rtf'
-      } else if (filename.endsWith('.csv')) {
-        mimeType = 'text/csv'
-      } else if (filename.endsWith('.epub')) {
-        mimeType = 'application/epub+zip'
-      } else if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) {
-        mimeType = 'image/jpeg'
-      } else if (filename.endsWith('.png')) {
-        mimeType = 'image/png'
-      } else if (filename.endsWith('.gif')) {
-        mimeType = 'image/gif'
-      } else if (filename.endsWith('.webp')) {
-        mimeType = 'image/webp'
-      } else if (filename.endsWith('.bmp')) {
-        mimeType = 'image/bmp'
-      } else {
-        // Default to text/plain for unknown text-like files
-        mimeType = 'text/plain'
-      }
-    }
-
+    const mimeType = file.type && file.type !== '' ? file.type : inferMimeTypeFromFilename(file.name)
     const filePath = platform.getLocalFilePath(file)
 
     return {
@@ -242,17 +238,17 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
     }
   }, [knowledgeBase?.visionModel])
 
-  // Handle file upload (shared logic)
-  const uploadFiles = useCallback(
-    async (files: FileList) => {
-      if (!knowledgeBase?.id || !files.length) return
+  // Handle upload of prepared file metadata (shared by drag&drop, file dialog and folder scans)
+  const uploadFileMetas = useCallback(
+    async (correctedFiles: FileMeta[]) => {
+      if (!knowledgeBase?.id || correctedFiles.length === 0) return
 
       try {
         const knowledgeBaseController = platform.getKnowledgeBaseController()
-        const oversizedFiles = Array.from(files)
+        const oversizedFiles = correctedFiles
           .filter((file) => file.size > KNOWLEDGE_BASE_MAX_FILE_SIZE)
           .map((file) => ({ name: file.name, size: file.size }))
-        const uploadableFiles = Array.from(files).filter((file) => file.size <= KNOWLEDGE_BASE_MAX_FILE_SIZE)
+        const uploadableFiles = correctedFiles.filter((file) => file.size <= KNOWLEDGE_BASE_MAX_FILE_SIZE)
 
         if (oversizedFiles.length > 0) {
           setSizeRejectedFiles(oversizedFiles)
@@ -270,16 +266,9 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
           return
         }
 
-        // Process and correct MIME types for all files
-        const correctedFiles: FileMeta[] = []
-        for (const file of uploadableFiles) {
-          const correctedFile = correctMimeType(file)
-          correctedFiles.push(correctedFile)
-        }
-
         // Upload all files using allSettled to allow partial successes
         const uploadResults = await Promise.allSettled(
-          correctedFiles.map(async (file) => {
+          uploadableFiles.map(async (file) => {
             const result = await knowledgeBaseController.uploadFile(knowledgeBase.id, file)
             return { file, fileId: result?.id }
           })
@@ -300,7 +289,7 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
         // Log individual failures
         uploadResults.forEach((result, index) => {
           if (result.status === 'rejected') {
-            const fileName = correctedFiles[index]?.name || 'Unknown file'
+            const fileName = uploadableFiles[index]?.name || 'Unknown file'
             console.error(`[Upload] Failed to upload file ${fileName}:`, result.reason)
             toastError(
               t('Failed to upload {{filename}}: {{error}}', {
@@ -320,11 +309,11 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
           toast.success(
             t('Successfully uploaded {{success}} of {{total}} file(s). {{failed}} file(s) failed.', {
               success: successfulUploads.length,
-              total: files.length,
+              total: correctedFiles.length,
               failed: blockedUploadCount,
             })
           )
-        } else if (blockedUploadCount === files.length) {
+        } else if (blockedUploadCount === correctedFiles.length) {
           // Don't show additional error toast here since individual errors were already shown
         }
 
@@ -334,9 +323,9 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
             knowledge_base_id: knowledgeBase.id,
             knowledge_base_name: knowledgeBase.name,
             file_count: successfulUploads.length,
-            total_attempted: files.length,
+            total_attempted: correctedFiles.length,
             failed_count: blockedUploadCount,
-            file_types: Array.from(new Set(correctedFiles.map((f) => f.type || 'unknown'))),
+            file_types: Array.from(new Set(uploadableFiles.map((f) => f.type || 'unknown'))),
           })
 
           // Immediately refresh the data to show the new files
@@ -359,7 +348,21 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
         )
       }
     },
-    [knowledgeBase?.id, knowledgeBase?.name, correctMimeType, refetch, refetchCount, invalidateFiles, isExpanded, t]
+    [knowledgeBase?.id, knowledgeBase?.name, onFileUploaded, refetch, refetchCount, invalidateFiles, isExpanded, t]
+  )
+
+  // Handle file upload from a FileList (file dialog)
+  const uploadFiles = useCallback(
+    async (files: FileList) => {
+      if (!knowledgeBase?.id || !files.length) return
+      // Process and correct MIME types for all files
+      const correctedFiles: FileMeta[] = []
+      for (let i = 0; i < files.length; i++) {
+        correctedFiles.push(correctMimeType(files[i]))
+      }
+      await uploadFileMetas(correctedFiles)
+    },
+    [knowledgeBase?.id, correctMimeType, uploadFileMetas]
   )
 
   // Validate file type against supported types
@@ -415,18 +418,82 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
       e.stopPropagation()
       setIsDragOver(false)
 
-      const files = e.dataTransfer.files
-      if (files.length === 0) {
+      const dataTransfer = e.dataTransfer
+
+      // Collect everything synchronously: DataTransfer items/files are invalidated
+      // as soon as the handler awaits.
+      const droppedFiles: File[] = []
+      const droppedDirs: { name: string; path: string }[] = []
+
+      // 'text/uri-list' is the reliable way to get absolute paths of dragged
+      // folders on Linux; read it while the event is still active.
+      let uriPaths: string[] = []
+      try {
+        uriPaths = dataTransfer
+          .getData('text/uri-list')
+          .split(/\r?\n/)
+          .filter((line) => line && !line.startsWith('#'))
+          .map((uri) => {
+            try {
+              const url = new URL(uri.trim())
+              if (url.protocol !== 'file:') return ''
+              // On Windows the pathname looks like '/C:/dir' - strip the leading slash.
+              return decodeURIComponent(url.pathname).replace(/^\/(?=[A-Za-z]:)/, '')
+            } catch {
+              return ''
+            }
+          })
+          .filter(Boolean)
+      } catch {
+        uriPaths = []
+      }
+
+      const items = dataTransfer.items
+      if (items && items.length > 0) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i]
+          if (item.kind !== 'file') continue
+          const entry = typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null
+          const file = item.getAsFile()
+          if (entry?.isDirectory) {
+            // Resolve the folder's absolute path: prefer the native path of the
+            // dropped item, fall back to matching the dragged 'file://' URIs.
+            let dirPath = ''
+            if (file) {
+              try {
+                dirPath = platform.getLocalFilePath(file) || ''
+              } catch {
+                dirPath = ''
+              }
+            }
+            if (!dirPath) {
+              dirPath = uriPaths.find((p) => p.endsWith(`/${entry.name}`) || p === entry.name) || ''
+            }
+            if (dirPath) {
+              droppedDirs.push({ name: entry.name, path: dirPath })
+            } else {
+              console.warn('[Upload] Dropped directory without resolvable path:', entry.name)
+            }
+          } else if (file) {
+            droppedFiles.push(file)
+          }
+        }
+      } else {
+        for (let i = 0; i < dataTransfer.files.length; i++) {
+          droppedFiles.push(dataTransfer.files[i])
+        }
+      }
+
+      if (droppedFiles.length === 0 && droppedDirs.length === 0) {
         toast.warning(t('No files were dropped'))
         return
       }
 
-      // Filter files by supported types
+      // Filter plain files by supported types
       const validFiles: File[] = []
       const invalidFiles: File[] = []
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
+      for (const file of droppedFiles) {
         if (validateFileType(file)) {
           validFiles.push(file)
         } else {
@@ -447,17 +514,75 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
         )
       }
 
-      // Upload valid files if any
-      if (validFiles.length > 0) {
-        // Create a proper FileList-like object
-        const fileListLike = Object.assign(validFiles, {
-          item: (index: number) => validFiles[index] || null,
-        }) as unknown as FileList
+      // Recursively scan dropped folders for matching files
+      const scannedFileMetas: FileMeta[] = []
+      if (droppedDirs.length > 0) {
+        const supportedExtensions = getSupportedFileTypes().accept.split(',').filter((type) => type.startsWith('.'))
+        const scanToastId = toast.loading(t('Scanning dropped folder(s)...'))
+        try {
+          const knowledgeBaseController = platform.getKnowledgeBaseController()
+          const scanResults = await Promise.all(
+            droppedDirs.map(async (dir) => {
+              try {
+                return await knowledgeBaseController.scanDirectory(dir.path, supportedExtensions)
+              } catch (error) {
+                console.error(`[Upload] Failed to scan folder ${dir.path}:`, error)
+                toastError(
+                  t('Failed to scan folder {{folder}}: {{error}}', {
+                    folder: dir.name,
+                    error: (error as Error)?.message || 'Unknown error',
+                  })
+                )
+                return { files: [], truncated: false }
+              }
+            })
+          )
 
-        await uploadFiles(fileListLike)
+          let truncatedScans = 0
+          for (const result of scanResults) {
+            if (result.truncated) truncatedScans++
+            for (const scanned of result.files) {
+              scannedFileMetas.push({
+                name: scanned.name,
+                path: scanned.path,
+                type: inferMimeTypeFromFilename(scanned.name),
+                size: scanned.size,
+              })
+            }
+          }
+
+          if (truncatedScans > 0) {
+            toast.warning(
+              t('Folder scan is limited to {{count}} file(s); some matching files were not added.', {
+                count: KNOWLEDGE_BASE_MAX_DIRECTORY_SCAN_FILES,
+              })
+            )
+          }
+
+          if (scannedFileMetas.length === 0 && truncatedScans === 0 && invalidFiles.length === 0) {
+            toast.warning(t('No supported files found in the dropped folder(s)'))
+          }
+        } finally {
+          toast.dismiss(scanToastId)
+        }
+      }
+
+      // Merge plain files with scanned folder contents, deduplicating by absolute path
+      const mergedMetas: FileMeta[] = []
+      const seenKeys = new Set<string>()
+      for (const meta of [...validFiles.map((file) => correctMimeType(file)), ...scannedFileMetas]) {
+        const dedupeKey = meta.path || `${meta.name}:${meta.size}`
+        if (seenKeys.has(dedupeKey)) continue
+        seenKeys.add(dedupeKey)
+        mergedMetas.push(meta)
+      }
+
+      // Upload everything collected from the drop
+      if (mergedMetas.length > 0) {
+        await uploadFileMetas(mergedMetas)
       }
     },
-    [uploadFiles, validateFileType, getSupportedFileTypes, t]
+    [uploadFileMetas, correctMimeType, validateFileType, getSupportedFileTypes, t]
   )
 
   // Handle file deletion
@@ -1090,7 +1215,9 @@ const KnowledgeBaseDocuments: React.FC<KnowledgeBaseDocumentsProps> = ({
                       color={isDragOver ? 'var(--chatbox-tint-brand)' : 'var(--chatbox-tint-gray)'}
                     />
                     <Text size="sm" fw={500} ta="center" c={isDragOver ? 'blue' : 'dimmed'}>
-                      {isDragOver ? t('Drop files here') : t('Drag and drop files here, or click to browse')}
+                      {isDragOver
+                        ? t('Drop files or folders here')
+                        : t('Drag and drop files or folders here, or click to browse')}
                     </Text>
                     <Text size="xs" c="dimmed" ta="center" mt={-4}>
                       {t('Supported formats')}: {supportedTypes.display.join(', ')}

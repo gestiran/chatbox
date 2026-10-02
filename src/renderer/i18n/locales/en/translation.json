@@ -1382,5 +1382,11 @@
   "Image Generation API Host": "Image Generation API Host",
   "Used by Qwen image generation models in Image Creator.": "Used by Qwen image generation models in Image Creator.",
   "Resolution": "Resolution",
-  "Invalid resolution. Use W*H format, each side between {{min}} and {{max}}.": "Invalid resolution. Use W*H format, each side between {{min}} and {{max}}."
+  "Invalid resolution. Use W*H format, each side between {{min}} and {{max}}.": "Invalid resolution. Use W*H format, each side between {{min}} and {{max}}.",
+  "Drag and drop files or folders here, or click to browse": "Drag and drop files or folders here, or click to browse",
+  "Drop files or folders here": "Drop files or folders here",
+  "Scanning dropped folder(s)...": "Scanning dropped folder(s)...",
+  "Failed to scan folder {{folder}}: {{error}}": "Failed to scan folder {{folder}}: {{error}}",
+  "Folder scan is limited to {{count}} file(s); some matching files were not added.": "Folder scan is limited to {{count}} file(s); some matching files were not added.",
+  "No supported files found in the dropped folder(s)": "No supported files found in the dropped folder(s)"
 }

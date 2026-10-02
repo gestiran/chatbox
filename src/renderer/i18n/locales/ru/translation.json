@@ -1382,5 +1382,11 @@
   "Image Generation API Host": "URL API генерации изображений",
   "Used by Qwen image generation models in Image Creator.": "Используется моделями генерации изображений Qwen в Image Creator.",
   "Resolution": "Разрешение",
-  "Invalid resolution. Use W*H format, each side between {{min}} and {{max}}.": "Неверное разрешение. Используйте формат Ш*В, каждая сторона от {{min}} до {{max}}."
+  "Invalid resolution. Use W*H format, each side between {{min}} and {{max}}.": "Неверное разрешение. Используйте формат Ш*В, каждая сторона от {{min}} до {{max}}.",
+  "Drag and drop files or folders here, or click to browse": "Перетащите файлы или папки сюда либо нажмите, чтобы выбрать",
+  "Drop files or folders here": "Отпустите файлы или папки здесь",
+  "Scanning dropped folder(s)...": "Сканирование перетащенных папок...",
+  "Failed to scan folder {{folder}}: {{error}}": "Не удалось просканировать папку {{folder}}: {{error}}",
+  "Folder scan is limited to {{count}} file(s); some matching files were not added.": "Сканирование папки ограничено {{count}} файлами; некоторые подходящие файлы не были добавлены.",
+  "No supported files found in the dropped folder(s)": "В перетащенных папках не найдено поддерживаемых файлов"
 }

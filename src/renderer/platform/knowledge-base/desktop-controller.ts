@@ -1,6 +1,6 @@
 import type { ElectronIPC } from '@shared/electron-types'
 import type { FileMeta, KnowledgeBaseSearchOptions } from '@shared/types'
-import type { KnowledgeBaseController } from './interface'
+import type { KnowledgeBaseController, ScannedDirectoryResult } from './interface'
 
 class DesktopKnowledgeBaseController implements KnowledgeBaseController {
   constructor(private ipc: ElectronIPC) {}
@@ -39,6 +39,10 @@ class DesktopKnowledgeBaseController implements KnowledgeBaseController {
 
   async uploadFile(kbId: number, file: FileMeta) {
     return await this.ipc.invoke('kb:file:upload', kbId, file)
+  }
+
+  async scanDirectory(dirPath: string, extensions: string[]): Promise<ScannedDirectoryResult> {
+    return await this.ipc.invoke('kb:scan-directory', { dirPath, extensions })
   }
 
   async deleteFile(fileId: number) {

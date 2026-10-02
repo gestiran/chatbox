@@ -157,6 +157,7 @@ const mockController: KnowledgeBaseController = {
   listFilesPaginated: async (kbId, offset = 0, limit = 20) =>
     knowledgeBaseFiles.filter((file) => file.kb_id === kbId).slice(offset, offset + limit),
   uploadFile: async () => undefined,
+  scanDirectory: async () => ({ files: [], truncated: false }),
   deleteFile: async () => undefined,
   retryFile: async () => undefined,
   pauseFile: async () => undefined,

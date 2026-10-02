@@ -1,8 +1,11 @@
 import { ipcMain, shell } from 'electron'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import type { FileMeta, KnowledgeBaseConnectionStatus, KnowledgeBaseSearchOptions } from 'src/shared/types'
 import {
   KNOWLEDGE_BASE_CHUNK_SIZES,
   KNOWLEDGE_BASE_DEFAULT_CHUNK_SIZE,
+  KNOWLEDGE_BASE_MAX_DIRECTORY_SCAN_FILES,
   KNOWLEDGE_BASE_MAX_FILE_SIZE,
 } from '../../shared/knowledge-base'
 import { sentry } from '../adapters/sentry'
@@ -501,6 +504,86 @@ export function registerKnowledgeBaseHandlers() {
       throw error
     }
   })
+
+  // Recursively scan a local directory for files matching the given extensions.
+  // Used when a folder is drag&dropped onto the Knowledge Base upload area:
+  // only metadata is returned, file contents are never read here.
+  ipcMain.handle(
+    'kb:scan-directory',
+    async (
+      _event,
+      params: { dirPath: string; extensions: string[] }
+    ): Promise<{ files: { name: string; path: string; size: number }[]; truncated: boolean }> => {
+      const dirPath = params?.dirPath
+      try {
+        log.debug(`ipcMain: kb:scan-directory, dirPath=${dirPath}, extensions=${params?.extensions?.join(',')}`)
+
+        if (!dirPath || typeof dirPath !== 'string') {
+          throw new Error('Invalid directory path')
+        }
+        const extensions = (Array.isArray(params?.extensions) ? params.extensions : [])
+          .filter((ext) => typeof ext === 'string' && ext.startsWith('.'))
+          .map((ext) => ext.toLowerCase())
+        if (extensions.length === 0) {
+          return { files: [], truncated: false }
+        }
+
+        const stat = await fs.stat(dirPath)
+        if (!stat.isDirectory()) {
+          throw new Error(`Not a directory: ${dirPath}`)
+        }
+
+        const files: { name: string; path: string; size: number }[] = []
+        let truncated = false
+        // Hard guard against symlink loops and absurdly deep trees.
+        const visited = new Set<string>()
+        const MAX_DEPTH = 64
+
+        const walk = async (dir: string, depth: number) => {
+          if (truncated || depth > MAX_DEPTH) return
+          const realDir = await fs.realpath(dir).catch(() => null)
+          if (!realDir || visited.has(realDir)) return
+          visited.add(realDir)
+
+          const entries = await fs.readdir(dir, { withFileTypes: true }).catch((error) => {
+            log.warn(`kb:scan-directory: cannot read directory ${dir}`, error)
+            return []
+          })
+
+          for (const entry of entries) {
+            if (truncated) return
+            // Skip hidden files/folders (e.g. .git, .cache)
+            if (entry.name.startsWith('.')) continue
+            const fullPath = path.join(dir, entry.name)
+            if (entry.isDirectory()) {
+              await walk(fullPath, depth + 1)
+            } else if (entry.isFile()) {
+              const lowerName = entry.name.toLowerCase()
+              if (!extensions.some((ext) => lowerName.endsWith(ext))) continue
+              try {
+                const fileStat = await fs.stat(fullPath)
+                files.push({ name: entry.name, path: fullPath, size: fileStat.size })
+                if (files.length >= KNOWLEDGE_BASE_MAX_DIRECTORY_SCAN_FILES) {
+                  truncated = true
+                  return
+                }
+              } catch (error) {
+                log.warn(`kb:scan-directory: cannot stat file ${fullPath}`, error)
+              }
+            }
+          }
+        }
+
+        await walk(dirPath, 0)
+
+        log.info(`ipcMain: kb:scan-directory done, dirPath=${dirPath}, found=${files.length}, truncated=${truncated}`)
+        return { files, truncated }
+      } catch (error: unknown) {
+        log.error(`ipcMain: kb:scan-directory failed for dirPath=${dirPath}`, error)
+        throw error
+      }
+    }
+  )
 
   // Search interface, embeddingProvider parameter is required.
   // Optional options carry the search tuning from Settings / Knowledge Base.

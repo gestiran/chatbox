@@ -23,6 +23,12 @@ export interface KnowledgeBaseController {
   listFilesPaginated(kbId: number, offset?: number, limit?: number): Promise<KnowledgeBaseFile[]>
   /** Returns the created file id; new files start as "modified" (not indexed). */
   uploadFile(kbId: number, file: FileMeta): Promise<{ id: number } | undefined>
+  /**
+   * Recursively scan a local directory for files whose extension is in
+   * `extensions` (lowercase, with leading dot, e.g. ['.pdf', '.md']).
+   * Used for folder drag&drop; returns metadata only (contents are read later).
+   */
+  scanDirectory(dirPath: string, extensions: string[]): Promise<ScannedDirectoryResult>
   deleteFile(fileId: number): Promise<void>
   retryFile(fileId: number): Promise<void>
   pauseFile(fileId: number): Promise<void>
@@ -64,4 +70,16 @@ export interface KnowledgeBaseController {
   updateFiles(kbId: number, fileIds: number[]): Promise<void>
   /** Open the system file manager at the file's folder (file selected). */
   showItemInFolder(filePath: string): Promise<void>
+}
+
+export type ScannedDirectoryFile = {
+  name: string
+  path: string
+  size: number
+}
+
+export type ScannedDirectoryResult = {
+  files: ScannedDirectoryFile[]
+  /** True when the scan hit the per-drop file limit and stopped early. */
+  truncated: boolean
 }

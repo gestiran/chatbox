@@ -4,6 +4,10 @@ export const KNOWLEDGE_BASE_MAX_PARSED_CONTENT_SIZE = 20 * 1024 * 1024
 export const KNOWLEDGE_BASE_MAX_PARSED_CONTENT_SIZE_LABEL = '20 MB'
 export const KNOWLEDGE_BASE_PARSED_CONTENT_TOO_LARGE_ERROR = 'knowledge_base_parsed_content_too_large'
 
+// Maximum number of files collected by a single recursive folder scan
+// (drag&drop of a directory onto the Knowledge Base upload area).
+export const KNOWLEDGE_BASE_MAX_DIRECTORY_SCAN_FILES = 1000
+
 // Allowed chunk sizes (in characters) for knowledge base documents.
 // The value is chosen when the base is created and cannot be changed later.
 export const KNOWLEDGE_BASE_CHUNK_SIZES = [512, 1024, 2048, 4096]
